@@ -5191,6 +5191,8 @@ async function generateBriefing(windowLabel) {
   } catch(e) {
     el.innerHTML = `<div style="color:var(--bear);font-size:11px;font-family:'IBM Plex Mono',monospace">Briefing error: ${e.message}</div>`;
   }
+}
+
 // Uses the Anthropic API (already in this platform) with web_search tool
 // No CORS issues — works from local file, GitHub Pages, or Google Drive
 
@@ -6476,8 +6478,6 @@ function clearAllLevels() {
   document.getElementById('ai-paste-input').value = '';
   document.getElementById('ai-parse-status').innerHTML = '';
   document.getElementById('ai-morning-output').innerHTML = '';
-}
-
 }
 
 </script>
