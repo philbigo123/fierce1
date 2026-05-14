@@ -31,6 +31,18 @@ header{background:rgba(5,5,10,0.96);backdrop-filter:blur(20px);border-bottom:1px
 /* Sub nav */
 .header-subnav{display:flex;align-items:center;gap:2px;padding:0 20px;height:36px;overflow-x:auto;scrollbar-width:none}
 .header-subnav::-webkit-scrollbar{display:none}
+.now-bar{display:flex;align-items:center;gap:14px;padding:5px 20px;height:28px;background:linear-gradient(90deg,rgba(124,92,252,0.04),rgba(0,214,143,0.03) 50%,rgba(124,92,252,0.04));border-bottom:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-muted);overflow-x:auto;scrollbar-width:none;white-space:nowrap}
+.now-bar::-webkit-scrollbar{display:none}
+.now-bar .nb-item{display:flex;align-items:center;gap:6px}
+.now-bar .nb-sep{color:var(--text-dim);opacity:0.4}
+.now-bar .nb-label{color:var(--text-dim);font-size:9px;text-transform:uppercase;letter-spacing:0.1em}
+.now-bar .nb-val{color:var(--text);font-weight:500}
+.now-bar .nb-accent{color:var(--accent-g)}
+.now-bar .nb-warn{color:var(--warn)}
+.now-bar .nb-bull{color:var(--bull)}
+.now-bar .nb-bear{color:var(--bear)}
+.gear-btn{background:none;border:1px solid var(--border2);color:var(--text-dim);font-size:14px;padding:5px 9px;border-radius:4px;cursor:pointer;transition:all 0.15s;margin-left:auto}
+.gear-btn:hover{color:var(--accent-g);border-color:var(--accent);background:rgba(124,92,252,0.08)}
 .subnav-btn{background:none;border:none;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;padding:4px 10px;border-radius:3px;cursor:pointer;white-space:nowrap;transition:all 0.15s}
 .subnav-btn:hover{color:var(--text);background:rgba(124,92,252,0.08)}
 .subnav-btn.active{color:var(--accent-g);background:rgba(124,92,252,0.12);box-shadow:inset 0 0 0 1px rgba(124,92,252,0.2)}
@@ -311,6 +323,7 @@ tr:hover td{background:rgba(124,92,252,0.04)}
       <button class="mode-btn" id="mode-playbook" onclick="switchMode('playbook')">📊 Playbook</button>
       <button class="mode-btn" id="mode-journal" onclick="switchMode('journal')">📒 Journal</button>
     </div>
+    <button class="gear-btn" title="Settings" onclick="openSettings()">⚙</button>
   </div>
   <div class="header-subnav" id="subnav-journal" style="display:none">
     <button class="subnav-btn active" onclick="showTab('dashboard',this)">Dashboard</button>
@@ -335,13 +348,20 @@ tr:hover td{background:rgba(124,92,252,0.04)}
     <button class="subnav-btn" onclick="showTab('session-levels',this);loadSessionHistory()">📋 Session History</button>
   </div>
   <div class="header-subnav" id="subnav-ai" style="display:none">
-    <button class="subnav-btn active" onclick="showTab('ai-morning',this)">☀️ Morning Brief</button>
-    <button class="subnav-btn" onclick="showTab('ai-tradovate',this)">📂 My Trades</button>
-    <button class="subnav-btn" onclick="showTab('ai-eod',this)">🌙 EOD Brief</button>
+    <button class="subnav-btn active" onclick="showTab('ai-tradovate',this)">📂 My Trades</button>
     <button class="subnav-btn" onclick="showTab('ai-simtrades',this)">🎯 Strategy Lab</button>
+    <button class="subnav-btn" onclick="showTab('ai-eod',this)">🌙 EOD Brief</button>
     <button class="subnav-btn" onclick="showTab('ai-reports',this)">🗃️ Reports</button>
     <button class="subnav-btn" onclick="showTab('ai-assistant',this);initAssistant()">💬 Ask FIERCE1</button>
-    <button class="subnav-btn" onclick="showTab('ai-settings',this)">⚙️ Settings</button>
+  </div>
+  <div class="now-bar" id="now-bar">
+    <span class="nb-item"><span class="nb-label">Now</span> <span class="nb-val" id="nb-time">—</span></span>
+    <span class="nb-sep">│</span>
+    <span class="nb-item"><span class="nb-label">Window</span> <span class="nb-val nb-accent" id="nb-window">—</span></span>
+    <span class="nb-sep">│</span>
+    <span class="nb-item"><span class="nb-label">Brief</span> <span class="nb-val" id="nb-brief">—</span></span>
+    <span class="nb-sep" id="nb-pending-sep" style="display:none">│</span>
+    <span class="nb-item" id="nb-pending-wrap" style="display:none"><span class="nb-label">Pending</span> <span class="nb-val nb-warn" id="nb-pending">—</span></span>
   </div>
 </header>
 
@@ -2234,6 +2254,32 @@ tr:hover td{background:rgba(124,92,252,0.04)}
     </div>
   </div>
 
+  <!-- Ask Questions panel -->
+  <div class="card mb-12">
+    <div class="flex justify-between items-center mb-12" style="flex-wrap:wrap;gap:8px">
+      <div class="section-label" style="margin-bottom:0">❓ Ask Arete's Notes</div>
+      <button id="arete-qa-clear-btn" onclick="clearAreteQA()" style="display:none;background:none;border:1px solid var(--border2);color:var(--text-muted);font-family:'IBM Plex Mono',monospace;font-size:10px;padding:5px 12px;border-radius:3px;cursor:pointer">Clear conversation</button>
+    </div>
+    <div class="callout" style="background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.3);margin-top:10px;margin-bottom:12px;font-size:12px;color:var(--text-muted)">
+      Ask any question about Arete's compiled notes — Claude answers based only on what's actually in the notes. Follow-up questions remember the last 3 exchanges.
+    </div>
+
+    <div id="arete-qa-history" style="margin-bottom:12px"></div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <input type="text" id="arete-question" placeholder="e.g. What does Arete say about risk management?"
+             onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();askArete();}"
+             style="flex:1;min-width:240px;background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:9px 12px;border-radius:4px">
+      <button class="ai-run-btn" onclick="askArete()" style="padding:9px 20px;font-size:13px;background:linear-gradient(135deg,#b45309,#f59e0b)">❓ Ask</button>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">
+      <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-dim);align-self:center;text-transform:uppercase;letter-spacing:0.08em">Try:</span>
+      <button onclick="document.getElementById('arete-question').value='What are Arete\u0027s core trading principles?';askArete()" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;font-family:'IBM Plex Mono',monospace;font-size:9px;padding:3px 8px;border-radius:3px;cursor:pointer">core principles</button>
+      <button onclick="document.getElementById('arete-question').value='How does Arete think about risk and losses?';askArete()" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;font-family:'IBM Plex Mono',monospace;font-size:9px;padding:3px 8px;border-radius:3px;cursor:pointer">risk &amp; losses</button>
+      <button onclick="document.getElementById('arete-question').value='What patterns or contradictions show up across the notes?';askArete()" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);color:#f59e0b;font-family:'IBM Plex Mono',monospace;font-size:9px;padding:3px 8px;border-radius:3px;cursor:pointer">patterns &amp; contradictions</button>
+    </div>
+  </div>
+
   <!-- Generate Narrative panel -->
   <div class="card mb-12">
     <div class="section-label">✨ Generate Narrative</div>
@@ -3813,12 +3859,122 @@ function switchMode(mode) {
     modeAI.classList.add('active');
     modeAI.style.background = 'linear-gradient(135deg,var(--accent-d),var(--accent))';
     document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
-    document.getElementById('ai-morning').classList.add('active');
+    document.getElementById('ai-tradovate').classList.add('active');
     document.querySelectorAll('#subnav-ai .subnav-btn').forEach(b => b.classList.remove('active'));
     document.querySelector('#subnav-ai .subnav-btn').classList.add('active');
     startNtfyRefresh();
   }
 }
+
+// ─── SETTINGS GEAR ICON ───────────────────────────────────────────────────────
+// Settings was removed from AI Brain subnav; gear icon in header opens it directly.
+function openSettings() {
+  switchMode('ai');
+  // After switching to AI mode, override the default-active section to settings
+  document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+  const settingsSec = document.getElementById('ai-settings');
+  if (settingsSec) settingsSec.classList.add('active');
+  // No subnav button to highlight — gear icon is the active trigger
+  document.querySelectorAll('#subnav-ai .subnav-btn').forEach(b => b.classList.remove('active'));
+}
+
+// ─── "NOW" STATUS BAR ─────────────────────────────────────────────────────────
+// Always-on header strip: ET time, current/next alert window, last briefing, pending count.
+// Updates every 30s. Cache market_briefing query so we don't hammer Supabase.
+window._nbBriefCache = { row: null, fetchedAt: 0 };
+
+async function updateNowBar() {
+  // Current ET time
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', timeZone: 'America/New_York', hour12: true
+  });
+  const nbTime = document.getElementById('nb-time');
+  if (nbTime) nbTime.textContent = timeStr + ' ET';
+
+  // Determine current/next alert window
+  // ET clock in minutes since midnight (DST-safe via Intl)
+  const etParts = new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/New_York'
+  }).formatToParts(now);
+  const etHour = parseInt(etParts.find(p => p.type === 'hour').value);
+  const etMin  = parseInt(etParts.find(p => p.type === 'minute').value);
+  const nowMin = etHour * 60 + etMin;
+
+  // ALERT_WINDOWS keys → minutes
+  const windowMinutes = (typeof ALERT_WINDOWS !== 'undefined' ? ALERT_WINDOWS : []).map(w => {
+    const [h, m] = w.key.split(':').map(Number);
+    return { key: w.key, label: w.label, mins: h*60 + m };
+  });
+
+  const nbWindow = document.getElementById('nb-window');
+  if (nbWindow && windowMinutes.length) {
+    // Find current window (most recent past) and next (upcoming)
+    let current = null, next = null;
+    for (const w of windowMinutes) {
+      if (w.mins <= nowMin) current = w;
+      else if (!next) next = w;
+    }
+    let txt;
+    if (!current && next) {
+      const dM = next.mins - nowMin;
+      txt = `Pre-market · ${next.label} in ${dM}m`;
+    } else if (current && next) {
+      const dM = next.mins - nowMin;
+      const dStr = dM < 60 ? `${dM}m` : `${Math.floor(dM/60)}h${dM%60 ? ' '+(dM%60)+'m' : ''}`;
+      txt = `${current.label} · next ${next.label} in ${dStr}`;
+    } else if (current && !next) {
+      txt = `${current.label} · session closed`;
+    } else {
+      txt = 'Closed';
+    }
+    nbWindow.textContent = txt;
+  }
+
+  // Last briefing (cache for 60s)
+  const nbBrief = document.getElementById('nb-brief');
+  if (nbBrief) {
+    const ageMs = Date.now() - (window._nbBriefCache.fetchedAt || 0);
+    if (ageMs > 60000 && typeof SB !== 'undefined' && SB.isConfigured && SB.isConfigured()) {
+      try {
+        const today = now.toISOString().split('T')[0];
+        const rows = await SB.select('ai_reports', `?type=eq.market_briefing&date=eq.${today}&order=created_at.desc&limit=1`);
+        window._nbBriefCache = { row: rows[0] || null, fetchedAt: Date.now() };
+      } catch(e) { /* keep stale */ }
+    }
+    const row = window._nbBriefCache.row;
+    if (row) {
+      const bias = (row.metadata?.bias || 'MIXED').toUpperCase();
+      const cls  = bias === 'BULLISH' ? 'nb-bull' : bias === 'BEARISH' ? 'nb-bear' : 'nb-warn';
+      const ageM = Math.round((Date.now() - new Date(row.created_at).getTime()) / 60000);
+      const ageStr = ageM < 60 ? `${ageM}m ago` : `${Math.floor(ageM/60)}h ago`;
+      nbBrief.className = 'nb-val ' + cls;
+      nbBrief.textContent = `${bias} · ${ageStr}`;
+    } else {
+      nbBrief.className = 'nb-val';
+      nbBrief.style.color = 'var(--text-dim)';
+      nbBrief.textContent = 'none today';
+    }
+  }
+
+  // Pending unsaved reports
+  const pending = window._pendingReports || {};
+  const pendingCount = Object.keys(pending).length;
+  const nbPendingSep  = document.getElementById('nb-pending-sep');
+  const nbPendingWrap = document.getElementById('nb-pending-wrap');
+  const nbPending     = document.getElementById('nb-pending');
+  if (pendingCount > 0 && nbPending) {
+    nbPending.textContent = `${pendingCount} unsaved`;
+    if (nbPendingSep)  nbPendingSep.style.display = '';
+    if (nbPendingWrap) nbPendingWrap.style.display = '';
+  } else {
+    if (nbPendingSep)  nbPendingSep.style.display = 'none';
+    if (nbPendingWrap) nbPendingWrap.style.display = 'none';
+  }
+}
+
+// Boot: tick the bar every 30s, plus an immediate first paint after DOM is ready.
+setTimeout(() => { updateNowBar(); setInterval(updateNowBar, 30000); }, 500);
 
 // ─── TRADE LOG (Supabase) ─────────────────────────────────────────────────────
 
@@ -3949,16 +4105,18 @@ async function generateJournalEntry() {
 
   try {
     // ── Pull all data for the date
-    let morningBrief = '', eodBrief = '', marketNews = '';
+    let morningBriefing = '', eodBrief = '', marketNews = '';
 
     if (SB.isConfigured()) {
-      const reports = await SB.select('ai_reports', `?date=eq.${date}&order=created_at.desc`);
-      const mb      = reports.find(r => r.type === 'morning_brief');
-      const eod     = reports.find(r => r.type === 'eod_brief');
-      const news    = reports.find(r => r.type === 'market_briefing');
-      if (mb)   morningBrief = mb.content;
-      if (eod)  eodBrief     = eod.content;
-      if (news) marketNews   = news.content?.substring(0, 600);
+      const reports = await SB.select('ai_reports', `?date=eq.${date}&order=created_at.asc`);
+      // First (earliest) market_briefing of the day = morning thesis
+      const morn = reports.find(r => r.type === 'market_briefing');
+      // Last (most recent) market_briefing = latest market context for journal narrative
+      const news = [...reports].reverse().find(r => r.type === 'market_briefing');
+      const eod  = reports.find(r => r.type === 'eod_brief');
+      if (morn) morningBriefing = morn.content;
+      if (eod)  eodBrief        = eod.content;
+      if (news) marketNews      = news.content?.substring(0, 600);
     }
 
     // ── Real trades for the day — uses global normDate()
@@ -3980,8 +4138,8 @@ async function generateJournalEntry() {
 
 You are writing as Phil's trading AI — write in first person as if Phil is reflecting on his day. Be specific, honest, and analytical. This is a permanent record.
 
-MORNING BRIEF:
-${morningBrief || 'Not available'}
+MORNING MARKET BRIEFING:
+${morningBriefing || 'Not available'}
 
 EOD BRIEF:
 ${eodBrief || 'Not available'}
@@ -5052,11 +5210,7 @@ async function loadSessionFeed() {
         state.windows[win.key] = { msg, timeET, receivedAt: p.time };
         newAlerts++;
 
-        // Auto-fill AI Brain
-        if (win.key === '08:00') {
-          autoFillFromMessage(msg, 'morning');
-          setTimeout(() => runAIMorningBrief(), 2000);
-        }
+        // Auto-fill AI Brain (Morning Brief removed — Market Briefing handles 8AM thesis now)
         if (win.key === '16:00') {
           autoFillFromMessage(msg, 'eod');
           const lv = parseLevelFields(msg);
@@ -5219,20 +5373,6 @@ function _markSaveError(elId, err) {
   _setStatus(elId, `<span style="color:var(--bear)">❌ Save failed: ${err}</span>`);
 }
 
-// ── Morning Brief
-async function commitMorningBrief() {
-  const pending = window._pendingReports?.morning_brief;
-  if (!pending) { _markUnsaved('ai-save-trades-status', 'Nothing to save — run Morning Brief first'); return; }
-  _markSaving('ai-save-trades-status');
-  try {
-    await sbSaveReport('morning_brief', pending.text, { levels: pending.levels });
-    await sbUpsertSession({ morning_brief_text: pending.text, morning_levels: pending.levels });
-    saveProposedTrades(); // local track record — used by EOD grading
-    delete window._pendingReports.morning_brief;
-    _markSaved('ai-save-trades-status', 'Morning Brief saved · proposed trades cached for EOD');
-  } catch(e) { _markSaveError('ai-save-trades-status', e.message); }
-}
-
 // ── EOD Brief
 async function commitEODBrief() {
   const pending = window._pendingReports?.eod_brief;
@@ -5322,6 +5462,8 @@ function _areteEscapeHtml(s) {
 }
 
 async function initArete() {
+  loadAreteQA();
+  renderAreteQA();
   await loadAreteNotes();
   await loadAretePastNarratives();
 }
@@ -5534,6 +5676,135 @@ async function deleteAreteNarrative(id) {
   } catch(e) {
     alert('Delete failed: ' + e.message);
   }
+}
+
+// ── Arete Q&A — ask questions against compiled notes, with conversation history
+//    Persisted in localStorage. Last 3 exchanges sent as context for follow-ups.
+function loadAreteQA() {
+  try { window._areteQA = JSON.parse(localStorage.getItem('fierce1_arete_qa') || '[]'); }
+  catch(e) { window._areteQA = []; }
+}
+function saveAreteQA() {
+  try { localStorage.setItem('fierce1_arete_qa', JSON.stringify(window._areteQA || [])); }
+  catch(e) {}
+}
+
+function renderAreteQA() {
+  const container = document.getElementById('arete-qa-history');
+  const clearBtn  = document.getElementById('arete-qa-clear-btn');
+  if (!container) return;
+  const qa = window._areteQA || [];
+  if (clearBtn) clearBtn.style.display = qa.length ? 'inline-block' : 'none';
+  if (qa.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = qa.map((item, i) => `
+    <div style="background:var(--bg2);border:1px solid var(--border);border-left:3px solid #f59e0b;border-radius:5px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;padding-bottom:8px;border-bottom:1px dashed var(--border)">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:#f59e0b;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;flex-shrink:0;margin-top:2px">Q${i+1}</span>
+        <span style="font-size:13px;color:var(--text);font-weight:600;line-height:1.5;flex:1">${_areteEscapeHtml(item.question)}</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <span style="font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--text-dim);font-weight:700;text-transform:uppercase;letter-spacing:0.12em;flex-shrink:0;margin-top:3px">A</span>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--text-muted);line-height:1.65;white-space:pre-wrap;flex:1">${_areteEscapeHtml(item.answer)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function clearAreteQA() {
+  if (!confirm('Clear the Q&A conversation? This cannot be undone.')) return;
+  window._areteQA = [];
+  saveAreteQA();
+  renderAreteQA();
+}
+
+async function askArete() {
+  const inputEl = document.getElementById('arete-question');
+  const question = (inputEl?.value || '').trim();
+  if (!question) return;
+
+  const notes = window._areteNotes || [];
+  if (notes.length === 0) {
+    alert('No notes saved yet — paste and save at least one founder note above first.');
+    return;
+  }
+
+  // Build corpus (chronological so Claude can reason about evolution)
+  const sorted = [...notes].sort((a, b) => {
+    const sa = a.metadata?.source_date || a.created_at || '';
+    const sb = b.metadata?.source_date || b.created_at || '';
+    return sa.localeCompare(sb);
+  });
+  const corpus = sorted.map((n, i) => {
+    const d = n.metadata?.source_date || (n.created_at || '').split('T')[0];
+    return `--- Note ${i+1} (${d}) ---\n${n.content || ''}`;
+  }).join('\n\n');
+
+  // Recent Q&A history (last 3 exchanges) for follow-up continuity
+  const recent = (window._areteQA || []).slice(-3);
+  const historyBlock = recent.length
+    ? '\n\nPREVIOUS Q&A IN THIS SESSION (for follow-up context):\n' +
+      recent.map(qa => `Q: ${qa.question}\nA: ${qa.answer}`).join('\n\n')
+    : '';
+
+  const systemPrompt = `You are answering Phil's questions about Arete's compiled trading notes (Arete is a mentor whose wisdom Phil is studying).
+
+You have access to all of Phil's saved notes below. Answer ONLY based on what's in the notes. If the question can't be answered from the notes, say so directly — don't invent or extrapolate beyond what Arete actually said.
+
+Be specific: reference dates when relevant, use direct quotes (under 15 words) when they capture something essential, and cite which note(s) the answer draws from. Don't pad or generalize.
+
+If this is a follow-up question, build on the previous exchange but stay grounded in the notes.
+
+NOTES:
+
+${corpus}${historyBlock}`;
+
+  // Add pending entry to UI immediately
+  const qaIndex = (window._areteQA = window._areteQA || []).length;
+  window._areteQA.push({ question, answer: '⏳ Reading the notes...', timestamp: Date.now() });
+  inputEl.value = '';
+  renderAreteQA();
+  // Scroll to the new question
+  const container = document.getElementById('arete-qa-history');
+  if (container) container.scrollTop = container.scrollHeight;
+
+  // Call API
+  const key = getApiKey();
+  const proxyUrl = localStorage.getItem('fierce1_proxy_url') || '';
+  if (!key || !proxyUrl) {
+    window._areteQA[qaIndex].answer = '⚠ API key or Proxy URL not set — go to AI Brain → Settings.';
+    saveAreteQA();
+    renderAreteQA();
+    return;
+  }
+
+  try {
+    const res = await fetch(proxyUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        apiKey: key,
+        model: 'claude-sonnet-4-5',
+        max_tokens: 1500,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: question }],
+      })
+    });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
+    }
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    const text = (data.content || []).filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    window._areteQA[qaIndex].answer = text || '(empty response)';
+  } catch(e) {
+    window._areteQA[qaIndex].answer = `❌ ${e.message}`;
+  }
+  saveAreteQA();
+  renderAreteQA();
 }
 
 // ── Session Feed collapse state — per-window, persisted in localStorage,
@@ -5908,10 +6179,6 @@ async function pbGenerateSetups() {
   // Get today's events
   const eventsCtx = getTodayEventsContext();
 
-  // Get morning brief context if available
-  const morning = window._todayBriefCache;
-  const briefCtx = morning ? `\nMORNING BRIEF BIAS:\n${(morning.briefText||'').slice(0,300)}` : '';
-
   pbConversationHistory = []; // Reset for new day
 
   try {
@@ -5922,7 +6189,7 @@ async function pbGenerateSetups() {
 
 TODAY'S LEVELS FROM SESSION FEED:
 ${levelsStr}
-${eventsCtx}${briefCtx}
+${eventsCtx}
 
 Based on these exact levels and your playbook statistics, generate a complete tactical trade plan:
 
@@ -6818,21 +7085,15 @@ async function generateBriefing(windowLabel) {
         return `${w.label}: ` + key_levels.filter(k=>lv[k]).map(k=>`${k.toUpperCase()}:${lv[k]}`).join(' ');
       }).join('\n');
 
-    // ── Fetch additional context in parallel: morning brief, EOD brief, trade ideas, Arete, prev briefings
+    // ── Fetch additional context in parallel: EOD brief, trade ideas, Arete, prev briefings
     const today = new Date().toISOString().split('T')[0];
-    const [morningRows, eodRows, ideaRows, areteNarrRows, areteNoteRows, prevReports] = await Promise.all([
-      SB.select('ai_reports', `?type=eq.morning_brief&date=eq.${today}&order=created_at.desc&limit=1`).catch(() => []),
+    const [eodRows, ideaRows, areteNarrRows, areteNoteRows, prevReports] = await Promise.all([
       SB.select('ai_reports', `?type=eq.eod_brief&order=created_at.desc&limit=1`).catch(() => []),
       SB.select('ai_reports', `?type=eq.trade_ideas&date=eq.${today}&order=created_at.asc&limit=20`).catch(() => []),
       SB.select('ai_reports', `?type=eq.arete_narrative&order=created_at.desc&limit=1`).catch(() => []),
       SB.select('ai_reports', `?type=eq.arete_note&order=created_at.desc&limit=1`).catch(() => []),
       SB.select('ai_reports', `?date=eq.${today}&type=eq.market_briefing&order=created_at.asc`).catch(() => []),
     ]);
-
-    // Morning Brief context (today's only)
-    const morningCtx = morningRows.length
-      ? `\n\nTODAY'S MORNING BRIEF (Phil's FIERCE1 analyst):\n${(morningRows[0].content||'').slice(0, 1800)}`
-      : '';
 
     // EOD Brief context (most recent — likely yesterday during midday)
     let eodCtx = '';
@@ -6888,7 +7149,7 @@ NEWS (top headlines, last 24h, sentiment-tagged):
 ${headlines}
 
 FIERCE1 SESSION LEVELS (today, by alert window):
-${levelLines || 'No levels captured yet today'}${morningCtx}${eodCtx}${ideasCtx}${areteCtx}${prevBriefings}
+${levelLines || 'No levels captured yet today'}${eodCtx}${ideasCtx}${areteCtx}${prevBriefings}
 
 You are synthesizing ALL of the above into a tactical briefing for Phil. Weigh news against his levels, his morning bias, last EOD's lesson, today's playbook ideas, and Arete's compiled wisdom. Be honest about contradictions.
 
@@ -8094,67 +8355,6 @@ Lessons: ${lessons || 'none yet'}`;
   }
 }
 
-async function runAIMorningBrief() {
-  const vals = {
-    asiaH: document.getElementById('ai-mb-asia-high').value,
-    asiaL: document.getElementById('ai-mb-asia-low').value,
-    lH: document.getElementById('ai-mb-london-high').value,
-    lL: document.getElementById('ai-mb-london-low').value,
-    ny: document.getElementById('ai-mb-ny-open').value,
-    pdh: document.getElementById('ai-mb-pdh').value,
-    pdl: document.getElementById('ai-mb-pdl').value,
-    mid2am: document.getElementById('ai-mb-2am-mid').value,
-  };
-  if (!vals.lH || !vals.lL || !vals.ny) {
-    document.getElementById('ai-morning-output').innerHTML = '<div class="callout callout-warn">⚠️ Enter at least London High, London Low, and NY 8AM Open.</div>';
-    return;
-  }
-
-  document.getElementById('ai-morning-output').innerHTML = '<div class="ai-thinking"><span class="ai-dot"></span><span class="ai-dot"></span><span class="ai-dot"></span></div>';
-
-  // Fetch history and levels in parallel
-  const [history, levelsCtx] = await Promise.all([
-    fetchHistoricalContext(),
-    fetchLevelsContext()
-  ]);
-
-  const lMid = ((parseFloat(vals.lH) + parseFloat(vals.lL)) / 2).toFixed(2);
-  const eventsCtx = getTodayEventsContext();
-
-  const msg  = `Morning Brief — ${new Date().toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}
-
-LEVELS: ASH:${vals.asiaH||'?'} ASL:${vals.asiaL||'?'} LDH:${vals.lH||'?'} LDL:${vals.lL||'?'} Mid:${lMid} Open:${vals.ny||'?'} (${parseFloat(vals.ny||0)>parseFloat(lMid)?'ABOVE':'BELOW'} mid) PDH:${vals.pdh||'?'} PDL:${vals.pdl||'?'}
-${eventsCtx}
-${history}${levelsCtx}
-
-Give me:
-1. ALN pattern (P1/P2/P3/P4) + probability + midpoint filter confirmation
-2. Directional bias (LONG/SHORT) + one sentence why
-3. Key structural level to respect today and why
-4. 2 risk factors or rules that apply specifically today
-No trade setups — those come from Playbook AI. Focus on context and bias only.`;
-  await callClaude(FIERCE1_SYSTEM, msg, document.getElementById('ai-morning-output'));
-
-  // Manual save mode — stash payload, show save button. User must click 💾 Save.
-  setTimeout(async () => {
-    const text = document.getElementById('ai-morning-output').innerText;
-    if (text.length > 50) {
-      const levels = {
-        asiaH: vals.asiaH, asiaL: vals.asiaL, lonH: vals.lH,
-        lonL:  vals.lL,    nyOpen: vals.ny,    pdh:  vals.pdh,
-        pdl:   vals.pdl,   lonMid: vals.mid2am,
-      };
-      window._pendingReports = window._pendingReports || {};
-      window._pendingReports.morning_brief = { text, levels };
-
-      // Show save button + pending status
-      const wrap = document.getElementById('ai-save-trades-wrap');
-      if (wrap) wrap.style.display = 'block';
-      _markUnsaved('ai-save-trades-status');
-    }
-  }, 2000);
-}
-
 // ── NTFY LEVEL FETCHER ──
 function updateBiasIndicator() {
   const ny  = parseFloat(document.getElementById('ai-mb-ny-open')?.value);
@@ -8336,48 +8536,6 @@ function clearAllLevels() {
 .ai-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(124,92,252,0.1);border:1px solid rgba(124,92,252,0.25);color:var(--accent-g);font-family:'IBM Plex Mono',monospace;font-size:9px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:3px 8px;border-radius:3px}
 </style>
 
-<section id="ai-morning">
-  <div class="page-title">
-    <h1>☀️ Morning <span class="accent">Brief</span></h1>
-    <p>Paste your TradingView levels or fill manually — Claude classifies ALN pattern, sets bias, generates all 3 FIERCE1 setups</p>
-  </div>
-
-  <!-- Hidden paste input kept for parser compatibility -->
-  <textarea id="ai-paste-input" style="display:none"></textarea>
-
-  <!-- LEVEL FETCH STATUS -->
-  <div style="display:flex;align-items:center;gap:10px;margin-bottom:13px;flex-wrap:wrap">
-    <button class="ai-run-btn" style="padding:8px 20px;font-size:13px;background:linear-gradient(135deg,#006b3c,#00a859)" onclick="fetchNtfyLevels()">📡 Fetch Levels from Session Feed</button>
-    <button onclick="clearAllLevels()" style="background:none;border:1px solid var(--border2);color:var(--text-muted);font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;padding:7px 14px;border-radius:4px;cursor:pointer">Clear</button>
-    <span id="ai-parse-status" style="font-family:'IBM Plex Mono',monospace;font-size:11px"></span>
-  </div>
-
-  <!-- MANUAL INPUTS -->
-  <div class="ai-panel">
-    <div class="section-label">Session Levels <span style="font-weight:400;color:var(--text-dim);font-size:9px;margin-left:6px">— auto-filled by parser or enter manually</span></div>
-    <div class="ai-input-grid">
-      <div class="form-group"><label>Asia High</label><input type="number" id="ai-mb-asia-high" placeholder="e.g. 21050.00" step="0.25"></div>
-      <div class="form-group"><label>Asia Low</label><input type="number" id="ai-mb-asia-low" placeholder="e.g. 20980.00" step="0.25"></div>
-      <div class="form-group"><label>London High</label><input type="number" id="ai-mb-london-high" placeholder="e.g. 21120.00" step="0.25"></div>
-      <div class="form-group"><label>London Low</label><input type="number" id="ai-mb-london-low" placeholder="e.g. 21040.00" step="0.25"></div>
-      <div class="form-group"><label>NY 8AM Open ★</label><input type="number" id="ai-mb-ny-open" placeholder="e.g. 21095.00" step="0.25" oninput="updateBiasIndicator()"></div>
-      <div class="form-group"><label>London Midpoint</label><input type="number" id="ai-mb-2am-mid" placeholder="e.g. 21010.00" step="0.25" oninput="updateBiasIndicator()"></div>
-      <div class="form-group"><label>Prior Day High</label><input type="number" id="ai-mb-pdh" placeholder="e.g. 21150.00" step="0.25"></div>
-      <div class="form-group"><label>Prior Day Low</label><input type="number" id="ai-mb-pdl" placeholder="e.g. 20900.00" step="0.25"></div>
-    </div>
-    <div id="ai-mb-bias-indicator" style="margin-bottom:10px"></div>
-    <button class="ai-run-btn" onclick="runAIMorningBrief()">🤖 Run Morning Brief</button>
-    <div class="ai-output" id="ai-morning-output"></div>
-    <div id="ai-save-trades-wrap" style="display:none;margin-top:12px">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <button class="ai-run-btn" style="padding:8px 20px;font-size:13px;background:linear-gradient(135deg,#006b3c,#00a859)" onclick="commitMorningBrief()">💾 Save Morning Brief to Database</button>
-        <span id="ai-save-trades-status" style="font-family:'IBM Plex Mono',monospace;font-size:11px"></span>
-      </div>
-    </div>
-  </div>
-</section>
-
-
 <section id="ai-settings">
   <div class="page-title">
     <h1>⚙️ <span class="accent">Settings</span></h1>
@@ -8550,9 +8708,9 @@ function clearAllLevels() {
     <p>Enter what actually happened — Claude grades today's proposed setups against real price action</p>
   </div>
   <div class="ai-panel">
-    <div class="section-label">Today's Proposed Setups</div>
+    <div class="section-label">Today's Market Briefing Context</div>
     <div id="ai-eod-proposed" class="callout callout-purple" style="font-size:13px;margin-bottom:14px">
-      No proposed trades saved for today. Run the Morning Brief and click <strong>💾 Save Proposed Trades</strong> first.
+      No market briefing saved for today yet. Run a briefing from the War Room and click <strong>💾 Save to Database</strong> first.
     </div>
     <div class="section-label" style="margin-top:16px">What Actually Happened</div>
 
@@ -8987,68 +9145,44 @@ async function autoFillEODLevels() {
   }
 }
 
-// ── Save proposed trades from morning brief
-function saveProposedTrades() {
-  const output   = document.getElementById('ai-morning-output').innerText;
-  const statusEl = document.getElementById('ai-save-trades-status');
-  if (!output || output.trim().length < 50) {
-    statusEl.innerHTML = '<span style="color:var(--warn)">⚠ Run Morning Brief first</span>';
-    return;
-  }
-  const today = new Date().toISOString().split('T')[0];
-  const entry = {
-    date:      today,
-    briefText: output,
-    levels: {
-      asiaH:  document.getElementById('ai-mb-asia-high').value,
-      asiaL:  document.getElementById('ai-mb-asia-low').value,
-      lonH:   document.getElementById('ai-mb-london-high').value,
-      lonL:   document.getElementById('ai-mb-london-low').value,
-      lonMid: document.getElementById('ai-mb-2am-mid').value,
-      nyOpen: document.getElementById('ai-mb-ny-open').value,
-      pdh:    document.getElementById('ai-mb-pdh').value,
-      pdl:    document.getElementById('ai-mb-pdl').value,
-    },
-    savedAt:  new Date().toISOString(),
-    eodText:  null,
-    grade:    null,
-    bias:     null,
-    hod:      null,
-    lod:      null,
-    close:    null,
-  };
-  const all = TR.getAll().filter(e => e.date !== today);
-  all.push(entry);
-  TR.save(all);
-  window._todayBriefCache = entry;
-  statusEl.innerHTML = '<span style="color:var(--bull)">✓ Saved — run EOD Brief tonight to grade</span>';
-  setTimeout(() => statusEl.innerHTML = '', 5000);
-}
-
-// ── Load today's proposed setups into EOD tab
-function loadTodayProposed() {
-  const today      = new Date().toISOString().split('T')[0];
-  const todayEntry = TR.getAll().find(e => e.date === today);
-  const el         = document.getElementById('ai-eod-proposed');
-  if (!todayEntry) {
-    el.innerHTML = 'No proposed trades saved for today. Run the Morning Brief and click <strong>💾 Save Proposed Trades</strong> first.';
+// ── Load today's earliest market briefing into EOD tab (replaces Morning Brief flow)
+async function loadTodayMarketBriefing() {
+  const el = document.getElementById('ai-eod-proposed');
+  if (!el) return null;
+  if (!SB.isConfigured()) {
+    el.innerHTML = 'Supabase not configured — connect in Settings to load today\'s market briefing.';
     el.className = 'callout callout-warn';
     return null;
   }
-  const savedTime = new Date(todayEntry.savedAt).toLocaleTimeString('en-US', {
-    hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'
-  });
-  el.innerHTML = `<strong style="color:var(--bull)">✓ Morning Brief saved at ${savedTime} ET</strong><br><br>` +
-    `<div style="font-size:12px;color:var(--text-muted);line-height:1.6">${(todayEntry.briefText||'').substring(0, 500)}${(todayEntry.briefText||'').length > 500 ? '...' : ''}</div>`;
-  el.className = 'callout callout-bull';
-  return todayEntry;
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    // Earliest briefing of the day = morning thesis (matches old Morning Brief role)
+    const rows = await SB.select('ai_reports', `?type=eq.market_briefing&date=eq.${today}&order=created_at.asc&limit=1`);
+    if (!rows.length) {
+      el.innerHTML = 'No market briefing saved for today yet. Run a briefing from the <strong>War Room → Live Intelligence</strong> tab and click <strong>💾 Save to Database</strong> first.';
+      el.className = 'callout callout-warn';
+      return null;
+    }
+    const row = rows[0];
+    const briefText = row.content || '';
+    const savedAt   = new Date(row.created_at).toLocaleTimeString('en-US', {
+      hour: '2-digit', minute: '2-digit', timeZone: 'America/New_York'
+    });
+    el.innerHTML = `<strong style="color:var(--bull)">✓ Market Briefing saved at ${savedAt} ET</strong><br><br>` +
+      `<div style="font-size:12px;color:var(--text-muted);line-height:1.6;white-space:pre-wrap">${briefText.substring(0, 500)}${briefText.length > 500 ? '…' : ''}</div>`;
+    el.className = 'callout callout-bull';
+    return { briefText, savedAt, date: today };
+  } catch(e) {
+    el.innerHTML = `<span style="color:var(--bear)">❌ ${e.message}</span>`;
+    return null;
+  }
 }
 
 // ── Save EOD results to track record
 async function saveEODResults(silent = false) {
   const today    = new Date().toISOString().split('T')[0];
   const statusEl = document.getElementById('ai-eod-save-status');
-  const pending  = window._todayBriefCache || JSON.parse(localStorage.getItem('fierce1_pending_eod') || 'null');
+  const pending  = JSON.parse(localStorage.getItem('fierce1_pending_eod') || 'null');
 
   const getVal = id => { const el = document.getElementById(id); return el?.value ? parseFloat(el.value) : null; };
   const getStr = id => { const el = document.getElementById(id); return el?.value || null; };
@@ -9139,18 +9273,14 @@ async function compileDailyReport(sessionDate, pending, patternRespected, bias) 
     const todayTrades = allTrades.filter(t => normDate(t.date) === sessionDate);
     const simTrades   = ST.getAll().filter(s => s.date === sessionDate);
 
-    let marketBriefing = '', morningBrief = '', morningLevels = {};
+    let marketBriefing = '', morningLevels = {};
 
     if (SB.isConfigured()) {
-      const [mbReports, newsReports] = await Promise.all([
-        SB.select('ai_reports', `?type=eq.morning_brief&date=eq.${sessionDate}&limit=1`),
-        SB.select('ai_reports', `?type=eq.market_briefing&date=eq.${sessionDate}&limit=1`),
-      ]);
+      const mbReports = await SB.select('ai_reports', `?type=eq.market_briefing&date=eq.${sessionDate}&order=created_at.asc&limit=1`);
       if (mbReports.length > 0) {
-        morningBrief  = mbReports[0].content || '';
-        morningLevels = mbReports[0].metadata?.levels || {};
+        marketBriefing = mbReports[0].content || '';
+        morningLevels  = mbReports[0].metadata?.levels || {};
       }
-      if (newsReports.length > 0) marketBriefing = newsReports[0].content || '';
     }
 
     // Pull trade ideas from Session Feed
@@ -9191,8 +9321,8 @@ ${marketBriefing ? marketBriefing.substring(0,400).trim() : 'No market briefing 
 2. OVERNIGHT & SESSION LEVELS
 ${levelsSection}
 
-3. MORNING PLAN
-${morningBrief ? morningBrief.substring(0,600).trim() : 'No morning brief recorded'}
+3. MORNING MARKET BRIEFING
+${marketBriefing ? marketBriefing.substring(0,800).trim() : 'No market briefing recorded today'}
 
 4. PLAYBOOK TRADE IDEAS vs OUTCOME
 ${ideaLines || '  No trade ideas generated today'}
@@ -9253,7 +9383,7 @@ function extractSetupResults(text) {
 
 // ── Run EOD Brief
 async function runAIEOD() {
-  const todayEntry = loadTodayProposed();
+  const todayEntry = await loadTodayMarketBriefing();
   const outputEl   = document.getElementById('ai-eod-output');
   const hod        = document.getElementById('ai-eod-hod').value;
   const lod        = document.getElementById('ai-eod-lod').value;
@@ -9322,7 +9452,7 @@ async function runAIEOD() {
     : 'No trades imported for today.'
 
   const briefContext = todayEntry
-    ? `MORNING PLAN: ${(todayEntry.briefText||'').slice(0,300)}`
+    ? `MORNING MARKET BRIEFING: ${(todayEntry.briefText||'').slice(0,500)}`
     : '';
 
   const ibRange = (ibh && ibl) ? (parseFloat(ibh) - parseFloat(ibl)).toFixed(2) : 'unknown';
@@ -10180,11 +10310,10 @@ function clearTradovate() {
 const _origShowTab2 = showTab;
 showTab = function(id, btn) {
   _origShowTab2(id, btn);
-  if (id === 'ai-morning') restoreLevelsFromStorage();
   if (id === 'ai-tradovate')  { populateAccountImportDropdown(); renderTradovate(); }
   if (id === 'pb-checklist')  renderChecklist();
   if (id === 'ai-eod') {
-    loadTodayProposed();
+    loadTodayMarketBriefing();
     // Always set to today — AI Brain is current day only
     const eodDateEl = document.getElementById('ai-eod-date');
     if (eodDateEl) {
