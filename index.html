@@ -3,140 +3,247 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CROC1 Systems — NQ Trading Platform v2</title>
+<title>CROC1 Systems — NQ Trading Platform</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Archivo+Black&family=IBM+Plex+Mono:wght@400;700&family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@600;700&display=swap');
 
-:root{
-  --bg:#0a0e0c;--bg2:#111814;--bg3:#16201b;--bg4:#1d2a23;
-  --border:rgba(79,174,106,0.14);--border2:rgba(79,174,106,0.30);
-  --accent:#4fae6a;--accent-g:#62c184;--accent-d:#2f6b42;
-  --bull:#d6ad4e;--bear:#e0524f;--warn:#e0913c;--text:#e9f0ea;
-  --text-dim:#7d8d83;--text-muted:#566159;
+:root {
+  --bg: #0a0e0c;
+  --bg2: #111814;
+  --bg3: #16201b;
+  --border: rgba(79,174,106,0.18);
+  --accent: #4fae6a;
+  --accent-g: #62c184;
+  --bull: #d6ad4e;
+  --bear: #e0524f;
+  --text: #e9f0ea;
+  --text-dim: #7d8d83;
+  --text-muted: #566159;
 }
 
-* {margin:0;padding:0;box-sizing:border-box}
-body {background:var(--bg); color:var(--text); font-family:'Saira',sans-serif; min-height:100vh; font-size:15px; line-height:1.5;}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Saira', sans-serif;
+  min-height: 100vh;
+  font-size: 15px;
+}
 
-body::before{content:'';position:fixed;inset:0;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/%3E%3C/svg%3E");pointer-events:none;z-index:9999;opacity:0.4;mix-blend-mode:overlay}
+header {
+  background: rgba(5,5,10,0.95);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
 
-header{background:rgba(5,5,10,0.96);backdrop-filter:blur(20px);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:100}
-.header-top{padding:12px 20px;display:flex;align-items:center;gap:16px}
-.logo{font-family:'Saira Condensed',sans-serif;font-size:24px;letter-spacing:0.12em;background:linear-gradient(135deg,#fff,var(--accent-g));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.logo {
+  font-family: 'Saira Condensed', sans-serif;
+  font-size: 26px;
+  letter-spacing: 0.12em;
+  background: linear-gradient(135deg, #fff, var(--accent-g));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
 
-.mode-switcher{display:flex;gap:4px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:4px}
-.mode-btn{background:none;border:none;color:var(--text-muted);font-size:13px;font-weight:700;letter-spacing:0.08em;padding:6px 16px;border-radius:4px;cursor:pointer}
-.mode-btn.active{background:linear-gradient(135deg,var(--accent-d),var(--accent));color:#fff}
+.now-bar {
+  margin-left: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  display: flex;
+  gap: 18px;
+}
 
-.card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;position:relative}
-.card-header{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;border-bottom:1px solid var(--border);padding-bottom:8px}
+main {
+  max-width: 1480px;
+  margin: 0 auto;
+  padding: 24px;
+}
 
-#warroom-grid{display:grid;grid-template-columns:2fr 420px;gap:18px;max-width:1580px;margin:20px auto;padding:0 20px}
-@media(max-width:1180px){#warroom-grid{grid-template-columns:1fr}}
+.grid {
+  display: grid;
+  grid-template-columns: 1.7fr 1fr;
+  gap: 20px;
+}
 
-.now-bar{background:linear-gradient(90deg,rgba(79,174,106,0.05),rgba(214,173,78,0.03));padding:8px 20px;font-family:'IBM Plex Mono',monospace;font-size:11px;display:flex;gap:20px;flex-wrap:wrap;align-items:center;border-bottom:1px solid var(--border)}
+@media (max-width: 1100px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px;
+}
+
+.card-title {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+#tape {
+  height: 420px;
+  overflow-y: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--accent-g);
+}
+
+.level-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px dashed rgba(255,255,255,0.05);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 13px;
+}
+
+.status {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
 </style>
 </head>
 <body>
 
 <header>
-  <div class="header-top">
-    <div class="logo">CROC1</div>
-    <div style="font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--text-dim)">NQ INTRADAY OS v2</div>
-    
-    <div class="mode-switcher" style="margin-left:auto">
-      <button class="mode-btn active" onclick="switchMode('warroom')">WAR ROOM</button>
-      <button class="mode-btn" onclick="switchMode('playbook')">PLAYBOOK</button>
-      <button class="mode-btn" onclick="switchMode('journal')">JOURNAL</button>
-    </div>
-  </div>
-  <div class="now-bar" id="now-bar">
-    <span>NOW <span id="nb-time" style="color:var(--accent-g)">—</span></span>
-    <span id="nb-bias">BIAS: LOADING</span>
-    <span>TRADES <span id="nb-count">0</span></span>
+  <div class="logo">CROC1</div>
+  <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--text-dim)">NQ INTRADAY</div>
+  <div class="now-bar">
+    <span id="clock">—</span>
+    <span id="status">Connecting...</span>
   </div>
 </header>
 
-<main id="main-content">
-  <div id="warroom" class="mode-panel">
-    <div id="warroom-grid">
-      <div>
-        <div class="card">
-          <div class="card-header">MORNING BIAS + KEY LEVELS</div>
-          <div id="bias-panel">Loading latest alerts from Supabase...</div>
-        </div>
-        <div class="card">
-          <div class="card-header">LIVE TAPE</div>
-          <div id="tape" style="height:380px;background:var(--bg3);border-radius:6px;padding:12px;font-family:'IBM Plex Mono',monospace;overflow-y:auto">Feed connecting...</div>
-        </div>
+<main>
+  <div class="grid">
+    <!-- Left -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="card">
+        <div class="card-title">Latest Levels (from alerts_raw)</div>
+        <div id="levels">Loading levels from Supabase...</div>
+        <div class="status" id="levels-status"></div>
       </div>
-      <div>
-        <div class="card">
-          <div class="card-header">AI SUGGESTED TRADES</div>
-          <div id="suggested">Waiting for levels...</div>
-        </div>
+
+      <div class="card">
+        <div class="card-title">Live Tape / Recent Alerts</div>
+        <div id="tape">Connecting to feed...</div>
+      </div>
+    </div>
+
+    <!-- Right -->
+    <div style="display:flex;flex-direction:column;gap:20px">
+      <div class="card">
+        <div class="card-title">Session Snapshot</div>
+        <div id="snapshot">Waiting for data...</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Quick Actions</div>
+        <button onclick="loadLatest()" style="background:var(--accent);color:#0a0e0c;border:none;padding:10px 18px;border-radius:6px;font-weight:700;cursor:pointer;width:100%">
+          Refresh Levels
+        </button>
       </div>
     </div>
   </div>
 </main>
 
-<button onclick="toggleAIAssist()" style="position:fixed;bottom:28px;right:28px;width:68px;height:68px;border-radius:50%;background:linear-gradient(135deg,var(--accent),#62c184);color:#fff;font-size:30px;box-shadow:0 8px 32px rgba(79,174,106,0.6);border:none;z-index:9999">🤖</button>
-
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-// ==================== YOUR SUPABASE ====================
-const SUPABASE_URL = 'https://yazqfrlpefuijfodzdiu.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlhenFmcmxwZWZ1aWZqb2R6ZGl1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjY0NzM2MDAsImV4cCI6MjA0MjA0OTYwMH0.YOUR_KEY_HERE'; // ← Replace with your real anon key
+  // ========== YOUR SUPABASE ==========
+  const SUPABASE_URL = 'https://yazqfrlpefuijfodzdiu.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_iPaW9l3NDtPoa1ddJthsNA_tliL2HUE';
 
-let supabaseClient;
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-async function initSupabase() {
-  supabaseClient = window.supabase.createClient(https://yazqfrlpefuijfodzdiu.supabase.co, sb_publishable_iPaW9l3NDtPoa1ddJthsNA_tliL2HUE);
-  console.log("✅ Connected to your Supabase project");
-  await loadLatestAlerts();
-}
+  // ========== CORE FUNCTIONS ==========
+  async function loadLatest() {
+    document.getElementById('status').textContent = 'Loading...';
+    document.getElementById('levels-status').textContent = 'Querying alerts_raw...';
 
-async function loadLatestAlerts() {
-  try {
-    const { data, error } = await supabaseClient
-      .from('alerts_raw')
-      .select('message, received_at')
-      .order('received_at', { ascending: false })
-      .limit(8);
+    try {
+      const { data, error } = await supabase
+        .from('alerts_raw')
+        .select('message, received_at')
+        .order('received_at', { ascending: false })
+        .limit(15);
 
-    if (error) throw error;
+      if (error) throw error;
 
-    let html = '<strong>Latest Alerts:</strong><br>';
-    data.forEach(row => {
-      html += `<small>${row.received_at} — ${row.message.substring(0, 90)}...</small><br>`;
-    });
-    document.getElementById('bias-panel').innerHTML = html || 'No alerts yet';
-    document.getElementById('nb-bias').innerHTML = `BIAS: <span style="color:var(--bull)">UPPER BIAS</span>`;
-  } catch (e) {
-    console.error(e);
-    document.getElementById('bias-panel').innerHTML = 'Error loading alerts — check RLS / keys';
+      if (!data || data.length === 0) {
+        document.getElementById('levels').innerHTML = '<span style="color:var(--text-muted)">No alerts found in alerts_raw</span>';
+        document.getElementById('tape').innerHTML = 'No recent alerts';
+        document.getElementById('status').textContent = 'Connected • 0 rows';
+        return;
+      }
+
+      // Show latest message as levels
+      const latest = data[0];
+      document.getElementById('levels').innerHTML = `
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;line-height:1.7;white-space:pre-wrap">
+${latest.message}
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text-dim)">
+          Received: ${new Date(latest.received_at).toLocaleString()}
+        </div>
+      `;
+
+      // Fill the tape with recent messages
+      let tapeHtml = '';
+      data.forEach(row => {
+        const time = new Date(row.received_at).toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'});
+        tapeHtml += `<div style="margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(255,255,255,0.05)">
+          <span style="color:var(--text-dim)">[${time}]</span><br>
+          ${row.message.substring(0, 140)}${row.message.length > 140 ? '...' : ''}
+        </div>`;
+      });
+      document.getElementById('tape').innerHTML = tapeHtml;
+
+      document.getElementById('snapshot').innerHTML = `
+        <div style="font-size:14px">
+          <div style="margin-bottom:8px"><strong>Total alerts loaded:</strong> ${data.length}</div>
+          <div style="color:var(--accent-g)">Latest alert is live</div>
+        </div>
+      `;
+
+      document.getElementById('status').textContent = `Connected • ${data.length} alerts`;
+      document.getElementById('levels-status').textContent = 'Last updated just now';
+    } catch (err) {
+      console.error(err);
+      document.getElementById('levels').innerHTML = `<span style="color:var(--bear)">Error: ${err.message}</span>`;
+      document.getElementById('status').textContent = 'Connection error';
+      document.getElementById('levels-status').textContent = err.message;
+    }
   }
-}
 
-function switchMode(mode) {
-  document.querySelectorAll('.mode-panel').forEach(el => el.style.display = 'none');
-  const panel = document.getElementById(mode);
-  if (panel) panel.style.display = 'block';
-}
+  // Clock
+  function updateClock() {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit'
+    });
+  }
 
-function toggleAIAssist() {
-  const q = prompt("Ask CROC1 Assistant:");
-  if (q) alert("Processing with live data from Supabase...\n\n" + q);
-}
-
-// Init
-async function init() {
-  await initSupabase();
-  document.getElementById('nb-time').textContent = new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
-  console.log("%cCROC1 v2 — War Room + Your Supabase Live", "color:#62c184;font-weight:bold");
-}
-
-init();
+  // Init
+  updateClock();
+  setInterval(updateClock, 1000);
+  loadLatest();
 </script>
 </body>
 </html>
