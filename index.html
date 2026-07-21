@@ -3,77 +3,64 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CROC1 Debug</title>
+<title>CROC1 Connection Debug</title>
 <style>
-  body { background: #0a0e0c; color: #e9f0ea; font-family: monospace; padding: 30px; }
-  .card { background: #111814; border: 1px solid #2f6b42; border-radius: 8px; padding: 20px; margin-bottom: 20px; max-width: 900px; }
-  button { background: #4fae6a; color: #000; border: none; padding: 12px 24px; font-weight: bold; border-radius: 6px; cursor: pointer; margin-top: 15px; }
-  pre { background: #000; padding: 15px; border-radius: 6px; overflow-x: auto; white-space: pre-wrap; color: #62c184; }
+  body {
+    background: #0a0e0c;
+    color: #e9f0ea;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    padding: 40px;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .card {
+    background: #111814;
+    border: 1px solid #2f6b42;
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  button {
+    background: #4fae6a;
+    color: #000;
+    border: none;
+    padding: 14px 28px;
+    font-size: 16px;
+    font-weight: 700;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  pre {
+    background: #000;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    font-size: 14px;
+    color: #62c184;
+    margin-top: 16px;
+  }
   .error { color: #e0524f; }
+  .ok { color: #4fae6a; }
 </style>
 </head>
 <body>
 
 <div class="card">
-  <h2>CROC1 Supabase Connection Test</h2>
-  <div id="status">Ready...</div>
-  <button onclick="testConnection()">Test Connection Now</button>
+  <h2>CROC1 Supabase Debug</h2>
+  <p>Click the button below. If nothing happens, look at the box underneath.</p>
+  <button onclick="runTest()">Test Connection</button>
 </div>
 
 <div class="card">
-  <h3>Full Error / Response</h3>
-  <pre id="output">Click the button above</pre>
+  <h3>Result</h3>
+  <pre id="log">Waiting for you to click the button...</pre>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-  const SUPABASE_URL = 'https://yazqfrlpefuijfodzdiu.supabase.co';
-  const SUPABASE_KEY = 'sb_publishable_iPaW9l3NDtPoa1ddJthsNA_tliL2HUE';
-
-  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
-  async function testConnection() {
-    const statusEl = document.getElementById('status');
-    const outputEl = document.getElementById('output');
-
-    statusEl.textContent = 'Testing...';
-    outputEl.textContent = 'Running query against alerts_raw...';
-
-    try {
-      // Test 1: simple select
-      const { data, error, status, statusText } = await supabase
-        .from('alerts_raw')
-        .select('message, received_at')
-        .order('received_at', { ascending: false })
-        .limit(5);
-
-      if (error) {
-        statusEl.innerHTML = '<span class="error">FAILED</span>';
-        outputEl.innerHTML = `
-ERROR OBJECT:
-${JSON.stringify(error, null, 2)}
-
-HTTP Status: ${status} ${statusText}
-
-Common causes:
-- RLS policy is blocking the anon/publishable key
-- Table name is wrong
-- Key is invalid or revoked
-`;
-        return;
-      }
-
-      statusEl.innerHTML = '<span style="color:#4fae6a">SUCCESS</span>';
-      outputEl.textContent = `SUCCESS — got ${data.length} rows\n\n` + JSON.stringify(data, null, 2);
-
-    } catch (err) {
-      statusEl.innerHTML = '<span class="error">EXCEPTION</span>';
-      outputEl.textContent = err.message + '\n\n' + err.stack;
-    }
-  }
-
-  // Auto-run on load
-  testConnection();
-</script>
-</body>
-</html>
+  // Simple logger that always works
+  function log(msg, isError = false) {
+    const el = document.getElementById('log');
+    const time = new Date().toLocaleTimeString();
+   
