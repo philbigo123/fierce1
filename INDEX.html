@@ -1,0 +1,1292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CROC1 — NQ Trading</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600;700&family=Saira:wght@400;500;600;700&family=Saira+Condensed:wght@600;700&display=swap');
+
+/* ─────────────────────────────────────────────────────────────
+   CROC1 — clean rebuild. Journal + War Room only.
+   Single static file, drop-in for GitHub Pages. No build step.
+   Reads the existing Supabase schema; AI calls go through the
+   existing Cloudflare Worker proxy. Keys live in localStorage,
+   entered once in Settings — never hard-coded.
+   ───────────────────────────────────────────────────────────── */
+
+:root{
+  --bg:#0a0e0c; --bg2:#111814; --bg3:#16201b; --bg4:#1d2a23;
+  --border:rgba(79,174,106,0.14); --border2:rgba(79,174,106,0.30);
+  --accent:#4fae6a; --accent-g:#62c184; --accent-d:#2f6b42;
+  --bull:#d6ad4e; --bear:#e0524f; --warn:#e0913c; --blue:#62a98a;
+  --text:#e9f0ea; --dim:#7d8d83; --muted:#566159; --gold:#d6ad4e;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'Saira',sans-serif;min-height:100vh;font-size:15px;line-height:1.5;overflow-x:hidden}
+/* subtle scanline + glow, kept faint so it never fights the data */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:9998;background:repeating-linear-gradient(0deg,transparent 0,transparent 2px,rgba(79,174,106,0.02) 2px,rgba(79,174,106,0.02) 3px);mix-blend-mode:overlay}
+body::after{content:'';position:fixed;top:-15vh;left:50%;transform:translateX(-50%);width:760px;height:380px;background:radial-gradient(ellipse at center,rgba(79,174,106,0.09) 0%,transparent 70%);pointer-events:none;z-index:0}
+
+/* session-closed: dims the whole app after "I'm done trading" */
+body.session-closed{filter:saturate(0.55) brightness(0.9);transition:filter .8s ease}
+
+a{color:var(--accent-g)}
+.mono{font-family:'IBM Plex Mono',monospace}
+.accent{color:var(--accent-g)}
+.bull{color:var(--bull)} .bear{color:var(--bear)} .warn{color:var(--warn)}
+.pos{color:var(--bull)} .neg{color:var(--bear)}
+button{font-family:inherit}
+
+/* ── HEADER ── */
+header{background:rgba(5,7,6,0.96);backdrop-filter:blur(18px);border-bottom:1px solid var(--border2);position:sticky;top:0;z-index:100;box-shadow:0 4px 34px rgba(0,0,0,0.6)}
+.header-top{display:flex;align-items:center;gap:16px;padding:0 18px;height:52px}
+.logo{display:flex;flex-direction:column;line-height:1;gap:2px}
+.logo b{font-family:'Saira Condensed',sans-serif;font-size:20px;letter-spacing:0.16em;background:linear-gradient(135deg,#fff,var(--accent-g) 60%,var(--accent));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.logo span{font-family:'IBM Plex Mono',monospace;font-size:7px;letter-spacing:0.24em;color:var(--dim);text-transform:uppercase}
+.hdr-div{width:1px;height:26px;background:var(--border2)}
+.modes{display:flex;gap:3px;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:3px}
+.mode-btn{background:none;border:none;color:var(--muted);font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:5px 16px;border-radius:4px;cursor:pointer;transition:.15s}
+.mode-btn:hover{color:var(--text)}
+.mode-btn.active{background:linear-gradient(135deg,var(--accent-d),var(--accent));color:#fff;box-shadow:0 2px 10px rgba(79,174,106,0.3)}
+.gear{margin-left:auto;background:none;border:1px solid var(--border2);color:var(--dim);width:34px;height:34px;border-radius:6px;cursor:pointer;font-size:15px}
+.gear:hover{color:var(--text);border-color:var(--accent)}
+
+/* now-bar (war room) */
+.nowbar{display:flex;align-items:center;gap:14px;padding:6px 18px;background:linear-gradient(90deg,rgba(79,174,106,0.05),rgba(214,173,78,0.03) 50%,rgba(79,174,106,0.05));border-top:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.nowbar .lbl{color:var(--dim);font-size:9px;text-transform:uppercase;letter-spacing:0.1em}
+.nowbar .v{color:var(--text);font-weight:600}
+.nowbar .sep{color:var(--dim);opacity:0.4}
+
+main{max-width:1360px;margin:0 auto;padding:22px 18px 60px;position:relative;z-index:1}
+section{display:none}
+section.active{display:block}
+.page-title{margin-bottom:18px}
+.page-title h1{font-family:'Saira Condensed',sans-serif;font-size:32px;letter-spacing:0.04em;font-weight:700}
+.page-title p{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--dim);margin-top:2px}
+
+/* cards + stat grid */
+.card{background:var(--bg2);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+.label{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--accent-g);margin-bottom:10px}
+.grid{display:grid;gap:10px;margin-bottom:14px}
+.g4{grid-template-columns:repeat(4,1fr)}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:repeat(2,1fr)}
+@media(max-width:900px){.g4{grid-template-columns:repeat(2,1fr)}.g3{grid-template-columns:1fr}.g2{grid-template-columns:1fr}}
+.stat{background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:13px 14px}
+.stat .k{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--dim);margin-bottom:6px}
+.stat .val{font-family:'Saira',sans-serif;font-size:26px;font-weight:700;line-height:1;letter-spacing:0.01em}
+.stat .sub{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);margin-top:5px}
+.stat.bull-b{border-left:2px solid var(--bull)}
+.stat.bear-b{border-left:2px solid var(--bear)}
+
+/* scope toggle */
+.toggle{display:inline-flex;background:var(--bg3);border:1px solid var(--border2);border-radius:6px;padding:3px;gap:2px}
+.toggle button{font-family:'IBM Plex Mono',monospace;font-size:11px;border:none;border-radius:4px;padding:5px 13px;cursor:pointer;background:transparent;color:var(--dim)}
+.toggle button.on{background:var(--accent-d);color:#fff}
+
+/* tables */
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--border)}
+th{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;color:var(--dim);position:sticky;top:0;background:var(--bg2)}
+tbody tr:hover{background:rgba(79,174,106,0.04)}
+.empty{text-align:center;color:var(--dim);padding:34px;font-family:'IBM Plex Mono',monospace;font-size:12px}
+
+/* buttons */
+.btn{background:var(--bg4);border:1px solid var(--border2);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:12px;padding:7px 15px;border-radius:5px;cursor:pointer}
+.btn:hover{border-color:var(--accent);color:var(--accent-g)}
+.btn.p{background:linear-gradient(135deg,var(--accent-d),var(--accent));color:#fff;border:none}
+.btn.v{background:linear-gradient(135deg,#5b3fd4,#8b5cf6);color:#fff;border:none}
+
+/* market intel band */
+.intel-strip{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:linear-gradient(90deg,rgba(224,145,60,0.08),rgba(224,82,79,0.05));border:1px solid rgba(224,145,60,0.35);border-radius:8px;padding:9px 14px;margin-bottom:14px}
+.intel-strip-lbl{font-family:'IBM Plex Mono',monospace;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--warn);white-space:nowrap}
+.cal-pill{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--bg3);border:1px solid var(--border2);border-radius:5px;padding:3px 9px;white-space:nowrap}
+.cal-pill.high{border-color:rgba(224,82,79,0.5);color:var(--bear)}
+.cal-pill.med{border-color:rgba(224,145,60,0.5);color:var(--warn)}
+.hl-row{background:var(--bg3);border:1px solid var(--border);border-left:2px solid var(--blue);border-radius:5px;padding:7px 10px}
+.hl-row a{font-size:12px;color:var(--text);text-decoration:none;line-height:1.4;display:block}
+.hl-row a:hover{color:var(--accent-g)}
+.hl-row .meta{font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim);margin-top:3px}
+#cal-full table td,#cal-full table th{padding:6px 9px}
+
+/* war room grid */
+.wr-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start}
+@media(max-width:820px){.wr-grid{grid-template-columns:1fr}}
+.wr-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+/* bias meter */
+.meter{height:12px;border-radius:6px;background:linear-gradient(90deg,var(--bear),var(--bg4) 50%,var(--bull));position:relative;margin:6px 0 4px}
+.meter i{position:absolute;top:-3px;width:3px;height:18px;background:#fff;border-radius:2px;box-shadow:0 0 8px #fff;transform:translateX(-50%)}
+.meter-lbl{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:9px;color:var(--dim)}
+
+/* price tape */
+.tape{max-height:440px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+.tape-row{background:var(--bg3);border:1px solid var(--border);border-left:2px solid var(--accent-d);border-radius:5px;padding:7px 10px;font-family:'IBM Plex Mono',monospace;font-size:11px}
+.tape-row .t{color:var(--dim);font-size:9px}
+.tape-row .m{color:var(--text);word-break:break-word;white-space:pre-wrap}
+
+/* suggested trades */
+.sug{background:var(--bg3);border:1px solid var(--border);border-radius:7px;padding:11px 13px;margin-bottom:9px}
+.sug .h{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.sug .dir{font-family:'Saira Condensed',sans-serif;font-weight:700;letter-spacing:0.08em;font-size:15px}
+.sug .body{font-size:13px;color:var(--text);line-height:1.45}
+.sug .lv{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--dim);margin-top:6px}
+.chip{font-family:'IBM Plex Mono',monospace;font-size:9px;padding:2px 8px;border-radius:10px;letter-spacing:0.08em;text-transform:uppercase}
+.chip.long{background:rgba(214,173,78,0.15);color:var(--bull)}
+.chip.short{background:rgba(224,82,79,0.15);color:var(--bear)}
+.chip.neutral{background:rgba(125,141,131,0.15);color:var(--dim)}
+
+textarea,input[type=text],input[type=date],input[type=number]{background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:13px;padding:8px 10px;border-radius:5px;width:100%}
+textarea{resize:vertical;min-height:64px}
+
+/* modal */
+.modal{display:none;position:fixed;inset:0;background:rgba(6,9,7,0.9);backdrop-filter:blur(8px);z-index:10000;padding:56px 20px;overflow-y:auto}
+.modal.open{display:block}
+.modal .box{max-width:520px;margin:0 auto;background:linear-gradient(180deg,var(--bg2),var(--bg3));border:1px solid var(--border2);border-radius:10px;padding:24px}
+.modal h2{font-family:'Saira Condensed',sans-serif;font-size:22px;letter-spacing:0.04em;margin-bottom:4px}
+.modal .fld{margin:14px 0}
+.modal .fld label{display:block;font-family:'IBM Plex Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:0.1em;color:var(--dim);margin-bottom:5px}
+
+.banner{padding:10px 16px;border-radius:7px;font-family:'IBM Plex Mono',monospace;font-size:12px;margin-bottom:14px;display:flex;gap:10px;align-items:center}
+.banner.warn{background:rgba(224,145,60,0.1);border:1px solid rgba(224,145,60,0.4);color:var(--warn)}
+.banner.closed{background:rgba(91,63,212,0.14);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd}
+
+.foot{margin-top:26px;padding-top:14px;border-top:1px solid var(--border);font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--muted);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+canvas{width:100%;display:block}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;vertical-align:-1px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="logo"><b>CROC1</b><span>Systems™</span></div>
+    <div class="hdr-div"></div>
+    <div class="modes">
+      <button class="mode-btn active" id="m-warroom" onclick="switchMode('warroom')">🎯 War Room</button>
+      <button class="mode-btn" id="m-journal" onclick="switchMode('journal')">📒 Journal</button>
+    </div>
+    <button class="gear" title="Settings" onclick="openSettings()">⚙</button>
+  </div>
+  <div class="nowbar" id="nowbar">
+    <span><span class="lbl">Now</span> <span class="v" id="nb-time">—</span></span>
+    <span class="sep">│</span>
+    <span><span class="lbl">Window</span> <span class="v accent" id="nb-window">—</span></span>
+    <span class="sep">│</span>
+    <span><span class="lbl">Trades</span> <span class="v" id="nb-count">0/7</span></span>
+    <span class="sep">│</span>
+    <span><span class="lbl">W/L</span> <span class="v" id="nb-wl">0-0</span></span>
+    <span class="sep">│</span>
+    <span><span class="lbl">P&L</span> <span class="v" id="nb-pnl">$0</span></span>
+  </div>
+</header>
+
+<main>
+<!-- ════════════════════════ WAR ROOM ════════════════════════ -->
+<section id="warroom" class="active">
+  <div id="closed-banner" class="banner closed" style="display:none">
+    🌙 Session closed for the day — auto-reopens tomorrow.
+    <button class="btn" style="padding:3px 10px;font-size:10px;margin-left:auto" onclick="reopenSession()">Reopen</button>
+  </div>
+
+  <div class="page-title" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1>War <span class="accent">Room</span></h1>
+      <p id="wr-status">Alerts, levels and AI briefings — all in one place</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn" onclick="refreshWarRoom()" title="Reload levels + alerts and re-render">↻ Refresh</button>
+      <button class="btn p" onclick="runBrief()">🧠 Generate Brief</button>
+      <button class="btn v" onclick="doEOD()" title="Done trading — close the session">🌙 I'm Done Trading</button>
+      <button class="btn" onclick="openPaste()" title="Backfill a missed alert window">📋 Paste Alert</button>
+    </div>
+  </div>
+
+  <div id="wr-nokey" class="banner warn" style="display:none">
+    ⚠ Add your Supabase anon key in Settings to pull live alerts and levels.
+    <button class="btn" style="padding:3px 10px;font-size:10px;margin-left:auto" onclick="openSettings()">Open Settings</button>
+  </div>
+
+  <!-- ── MARKET INTEL BAND ── news layer: econ calendar strip + macro summary + headlines -->
+  <div class="intel-strip" id="cal-strip">
+    <span class="intel-strip-lbl">⚠ High-impact today</span>
+    <span class="mono" id="cal-strip-body" style="font-size:11px;color:var(--dim)">Intel not loaded — hit Refresh Intel.</span>
+    <button class="btn" style="padding:3px 11px;font-size:10px;margin-left:auto" onclick="refreshIntel()" id="intel-refresh-btn">↻ Refresh Intel</button>
+  </div>
+
+  <div class="wr-grid" style="margin-bottom:14px">
+    <div class="wr-col">
+      <div class="card" style="margin-bottom:0">
+        <div class="label">📰 Macro Summary <span class="mono" id="intel-summary-time" style="font-size:8px;color:var(--dim);letter-spacing:0;text-transform:none"></span></div>
+        <div id="intel-summary" class="mono" style="font-size:12px;color:var(--dim);line-height:1.65">No summary yet. Refresh Intel to pull what's moving markets today.</div>
+      </div>
+    </div>
+    <div class="wr-col">
+      <div class="card" style="margin-bottom:0">
+        <div class="label">🗞 Headlines — newest first</div>
+        <div id="intel-headlines" class="tape" style="max-height:260px"><div class="mono" style="font-size:11px;color:var(--dim)">No headlines yet.</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- full econ calendar (week) — collapsible under the strip -->
+  <details class="card" id="cal-full" style="margin-bottom:14px">
+    <summary class="label" style="cursor:pointer;margin-bottom:0;list-style:none">📅 Economic Calendar — this week <span class="mono" style="font-size:8px;color:var(--dim)">(click to expand)</span></summary>
+    <div id="cal-full-body" style="margin-top:12px;overflow-x:auto">
+      <div class="mono" style="font-size:11px;color:var(--dim)">Refresh Intel to load the week's high-impact events.</div>
+    </div>
+  </details>
+
+  <div class="wr-grid">
+    <div class="wr-col">
+      <div class="card">
+        <div class="label">⚖ Bias &amp; Price</div>
+        <div class="meter"><i id="bias-needle" style="left:50%"></i></div>
+        <div class="meter-lbl"><span>SHORT</span><span id="bias-word" class="mono accent">NEUTRAL</span><span>LONG</span></div>
+        <div class="mono" style="margin-top:10px;font-size:12px;color:var(--dim)" id="price-now">No price yet — waiting for alerts.</div>
+      </div>
+      <div class="card">
+        <div class="label">🧠 Brief</div>
+        <div id="brief-body" class="mono" style="font-size:12px;color:var(--dim);line-height:1.6">No brief yet. Click <b>Generate Brief</b> once levels are in.</div>
+      </div>
+      <div class="card">
+        <div class="label">⚖ Rules &amp; Risk</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+          <div class="stat" style="text-align:center;padding:10px 6px"><div class="val" style="font-size:22px">$250</div><div class="k" style="margin:4px 0 0">max / trade</div></div>
+          <div class="stat" style="text-align:center;padding:10px 6px"><div class="val" style="font-size:22px">4</div><div class="k" style="margin:4px 0 0">micros max (MNQ)</div></div>
+          <div class="stat" style="text-align:center;padding:10px 6px"><div class="val" style="font-size:22px">7</div><div class="k" style="margin:4px 0 0">trades / day</div></div>
+          <div class="stat bear-b" style="text-align:center;padding:10px 6px"><div class="val bear" style="font-size:22px">$1,000</div><div class="k" style="margin:4px 0 0">daily stop</div></div>
+        </div>
+        <div class="mono" style="font-size:11px;color:var(--muted);line-height:1.8">
+          hard stop at noon ET · no post-noon adds
+        </div>
+      </div>
+    </div>
+    <div class="wr-col">
+      <div class="card">
+        <div class="label">🎯 Suggested Trades — today</div>
+        <div id="sug-body"><div class="mono" style="font-size:11px;color:var(--dim)">Generate a brief to get today's ideas.</div></div>
+      </div>
+      <div class="card">
+        <div class="label">📈 Price Tape — newest first</div>
+        <div class="tape" id="tape"><div class="mono" style="font-size:11px;color:var(--dim)">No alerts yet today.</div></div>
+      </div>
+      <div class="card">
+        <div class="label">📝 Session Notes</div>
+        <textarea id="note-input" placeholder="Log a read, a mistake, a feeling… (saved locally per day)"></textarea>
+        <button class="btn" style="margin-top:8px" onclick="addNote()">＋ Add note</button>
+        <div id="notes-list" style="margin-top:12px;display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════ JOURNAL ════════════════════════ -->
+<section id="journal">
+  <div class="page-title" style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:12px">
+    <div>
+      <h1>Trading <span class="accent">Journal</span></h1>
+      <p id="jnl-range">Loading from database…</p>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+      <div class="toggle">
+        <button id="sc-week" class="on" onclick="setScope('week')">This week</button>
+        <button id="sc-all" onclick="setScope('all')">All-time</button>
+        <button id="sc-since" onclick="setScope('since')">Since…</button>
+      </div>
+      <div id="since-wrap" style="display:none;align-items:center;gap:5px" class="mono">
+        <span style="font-size:9px;color:var(--dim)">since</span>
+        <input type="date" id="since-date" style="width:auto;font-size:11px;padding:2px 5px" onchange="renderJournal()">
+      </div>
+    </div>
+  </div>
+
+  <div id="jnl-nokey" class="banner warn" style="display:none">
+    ⚠ Add your Supabase anon key in Settings to load your trades.
+    <button class="btn" style="padding:3px 10px;font-size:10px;margin-left:auto" onclick="openSettings()">Open Settings</button>
+  </div>
+
+  <!-- ── TRADING COACH ── AI behavioral analysis of the scoped trades -->
+  <div class="card" id="coach-card" style="border-left:3px solid var(--accent)">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div class="label" style="margin-bottom:0;color:var(--accent-g)">🧠 Trading Coach — behavioral read</div>
+      <button class="btn p" id="coach-btn" onclick="analyzeTrading()" style="padding:6px 14px;font-size:11px">Analyze <span id="coach-scope-lbl">this week</span></button>
+    </div>
+    <div id="coach-body" class="mono" style="font-size:12px;color:var(--dim);margin-top:12px;line-height:1.6">
+      Reads your logged trades in the current view and calls out what's working, where the leaks are, and one thing to focus on. It coaches process and discipline — not market calls.
+    </div>
+  </div>
+
+  <!-- core -->
+  <div class="grid g4">
+    <div class="stat bull-b"><div class="k">Net P&L</div><div class="val" id="j-pnl">—</div><div class="sub">all accounts</div></div>
+    <div class="stat"><div class="k">Win Rate</div><div class="val accent" id="j-wr">—</div><div class="sub" id="j-wl">0W / 0L</div></div>
+    <div class="stat"><div class="k">Profit Factor</div><div class="val accent" id="j-pf">—</div><div class="sub">gross win / gross loss</div></div>
+    <div class="stat"><div class="k">Expectancy</div><div class="val accent" id="j-exp">—</div><div class="sub">avg $ per trade</div></div>
+  </div>
+  <!-- R metrics -->
+  <div class="grid g4">
+    <div class="stat"><div class="k">Expectancy (R)</div><div class="val accent" id="j-expr">—</div><div class="sub">1R = $250</div></div>
+    <div class="stat"><div class="k">Total R</div><div class="val accent" id="j-totr">—</div><div class="sub">cumulative R</div></div>
+    <div class="stat"><div class="k">System Quality</div><div class="val accent" id="j-sqn">—</div><div class="sub" id="j-sqn-g">Tharp SQN</div></div>
+    <div class="stat"><div class="k">Avg W/L (R)</div><div class="val" id="j-wlr">—</div><div class="sub">winners vs losers</div></div>
+  </div>
+  <!-- daily profile -->
+  <div class="grid g2">
+    <div class="stat bull-b"><div class="k">Avg Winning Day</div><div class="val bull" id="j-awd">—</div><div class="sub" id="j-wd">0 green days</div></div>
+    <div class="stat bear-b"><div class="k">Avg Losing Day</div><div class="val bear" id="j-ald">—</div><div class="sub" id="j-ld">0 red days</div></div>
+  </div>
+  <!-- trade quality -->
+  <div class="grid g4">
+    <div class="stat bull-b"><div class="k">Avg Winner</div><div class="val bull" id="j-aw">—</div><div class="sub" id="j-aw-pts">— pts</div></div>
+    <div class="stat bear-b"><div class="k">Avg Loser</div><div class="val bear" id="j-al">—</div><div class="sub" id="j-al-pts">— pts</div></div>
+    <div class="stat"><div class="k">Win/Loss Ratio</div><div class="val accent" id="j-wlrat">—</div><div class="sub">avg win ÷ avg loss</div></div>
+    <div class="stat"><div class="k">Avg Size</div><div class="val accent" id="j-avgq">—</div><div class="sub">contracts/trade</div></div>
+  </div>
+
+  <!-- discipline -->
+  <div class="card" style="border-left:3px solid var(--warn)">
+    <div class="label" style="color:var(--warn)">⚖ Discipline Scorecard — Rule Adherence</div>
+    <div class="grid g3" style="margin-bottom:0">
+      <div class="stat bull-b"><div class="k">Clean Days</div><div class="val bull" id="j-clean">—</div><div class="sub">zero rule breaks</div></div>
+      <div class="stat bear-b"><div class="k">Total Mistakes</div><div class="val bear" id="j-mist">—</div><div class="sub">hard-rule violations</div></div>
+      <div class="stat"><div class="k">Post-noon · net</div><div class="val" id="j-pn">—</div><div class="sub">$ from trading past noon</div></div>
+    </div>
+    <div class="mono" id="j-mist-break" style="font-size:11px;color:var(--muted);line-height:1.7;margin-top:10px"></div>
+    <div class="mono" style="font-size:9px;color:var(--dim);margin-top:8px">Rails: ≤7 trades/day · ≤4 micros · honor −$250 stop · noon stop · −$1K daily floor.</div>
+  </div>
+
+  <!-- risk + timing -->
+  <div class="grid g4">
+    <div class="stat"><div class="k">Largest Winner</div><div class="val bull" id="j-best">—</div><div class="sub" id="j-best-sym">—</div></div>
+    <div class="stat"><div class="k">Largest Loser</div><div class="val bear" id="j-worst">—</div><div class="sub" id="j-worst-sym">—</div></div>
+    <div class="stat"><div class="k">Max Consec. Wins</div><div class="val bull" id="j-mcw">—</div><div class="sub">in a row</div></div>
+    <div class="stat"><div class="k">Max Consec. Losses</div><div class="val bear" id="j-mcl">—</div><div class="sub">in a row</div></div>
+  </div>
+  <div class="grid g4">
+    <div class="stat bull-b"><div class="k">Best Hour ET</div><div class="val bull" id="j-bh">—</div><div class="sub" id="j-bh-pnl">avg P&L</div></div>
+    <div class="stat bear-b"><div class="k">Worst Hour ET</div><div class="val bear" id="j-wh">—</div><div class="sub" id="j-wh-pnl">avg P&L</div></div>
+    <div class="stat"><div class="k">Total Trades</div><div class="val accent" id="j-total">—</div><div class="sub" id="j-days">0 days</div></div>
+    <div class="stat"><div class="k">Trades / Day</div><div class="val accent" id="j-tpd">—</div><div class="sub">avg active days</div></div>
+  </div>
+
+  <!-- long/short + dow -->
+  <div class="grid g2">
+    <div class="card" style="margin-bottom:0">
+      <div class="label">Long vs Short</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div>
+          <div class="mono" style="font-size:9px;color:var(--bull);letter-spacing:0.1em;margin-bottom:4px">LONG</div>
+          <div style="font-size:24px;color:var(--bull);font-weight:700" id="j-long-wr">—</div>
+          <div class="mono" style="font-size:10px;color:var(--dim)" id="j-long-s">— trades</div>
+          <div class="mono" style="font-size:11px;color:var(--bull);margin-top:3px" id="j-long-p">—</div>
+        </div>
+        <div>
+          <div class="mono" style="font-size:9px;color:var(--bear);letter-spacing:0.1em;margin-bottom:4px">SHORT</div>
+          <div style="font-size:24px;color:var(--bear);font-weight:700" id="j-short-wr">—</div>
+          <div class="mono" style="font-size:10px;color:var(--dim)" id="j-short-s">— trades</div>
+          <div class="mono" style="font-size:11px;color:var(--bear);margin-top:3px" id="j-short-p">—</div>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="label">Best Day of Week</div>
+      <div id="j-dow" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="label">P&L by Hour (ET) — your edge map</div>
+    <canvas id="j-hour" height="120"></canvas>
+  </div>
+  <div class="card">
+    <div class="label">Cumulative P&L</div>
+    <canvas id="j-equity" height="150"></canvas>
+  </div>
+
+  <div class="card">
+    <div class="label">📓 All Trades</div>
+    <div style="overflow-x:auto;max-height:520px;overflow-y:auto">
+      <table id="j-trades-tbl">
+        <thead><tr><th>Date</th><th>Account</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Pts</th><th>P&L</th></tr></thead>
+        <tbody id="j-trades-body"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="foot">
+    <span>CROC1 Systems™ · Trading Journal</span>
+    <span>© 2026 CROC1 Systems</span>
+  </div>
+</section>
+</main>
+
+<!-- ════════════════════════ SETTINGS ════════════════════════ -->
+<div class="modal" id="settings">
+  <div class="box">
+    <h2>Settings</h2>
+    <p class="mono" style="font-size:11px;color:var(--dim)">Keys are stored only in this browser (localStorage). Never committed to the repo.</p>
+    <div class="fld">
+      <label>Supabase anon key</label>
+      <input type="text" id="set-key" placeholder="eyJhbGciOi…">
+      <div class="mono" style="font-size:9px;color:var(--dim);margin-top:4px">supabase.com → Project Settings → API → anon public</div>
+    </div>
+    <div class="fld">
+      <label>AI Proxy URL (Cloudflare Worker)</label>
+      <input type="text" id="set-proxy" placeholder="https://…workers.dev">
+    </div>
+    <div class="fld">
+      <label>Anthropic API key (passed to the proxy, not stored server-side)</label>
+      <input type="text" id="set-ai" placeholder="sk-ant-…">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn p" onclick="saveSettings()" style="flex:1">Save</button>
+      <button class="btn" onclick="testConn()">Test</button>
+      <button class="btn" onclick="closeSettings()">Close</button>
+    </div>
+    <div id="set-status" class="mono" style="font-size:11px;margin-top:12px;color:var(--dim)"></div>
+  </div>
+</div>
+
+<!-- paste-alert backfill -->
+<div class="modal" id="paste">
+  <div class="box">
+    <h2>Paste Alert</h2>
+    <p class="mono" style="font-size:11px;color:var(--dim)">Recover a missed window. Paste the CROC1 alert text from TradingView's log; it writes into that day's session feed.</p>
+    <div class="fld"><label>Date</label><input type="date" id="paste-date"></div>
+    <div class="fld"><label>Window (ET)</label>
+      <select id="paste-window" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);font-family:'IBM Plex Mono',monospace;padding:8px;border-radius:5px;width:100%">
+        <option>02:00</option><option>07:00</option><option>08:00</option><option>09:30</option><option>10:30</option><option selected>12:00</option><option>16:00</option>
+      </select>
+    </div>
+    <div class="fld"><label>Alert text</label><textarea id="paste-text" placeholder="CROC1 … SH: 20450 SL: 20380 PDH: …"></textarea></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button class="btn p" onclick="submitPaste()" style="flex:1">Backfill window</button>
+      <button class="btn" onclick="closePaste()">Cancel</button>
+    </div>
+    <div id="paste-status" class="mono" style="font-size:11px;margin-top:10px;color:var(--dim)"></div>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   CONFIG + SUPABASE LAYER
+   ═══════════════════════════════════════════════════════════════ */
+const SB_URL = 'https://yazqfrlpefuijfodzdiu.supabase.co';
+const DEFAULT_PROXY = 'https://bold-thunder-1398.philbigo123.workers.dev';
+const R_DOLLARS = 250;                    // 1R = $250 per-trade stop
+const RAILS = { maxTrades:7, sizeCap:4, perTradeStop:-250, noonHourET:12, dayFloor:-1000 };
+
+const SB = {
+  key:   () => localStorage.getItem('fierce1_sb_key') || '',
+  proxy: () => localStorage.getItem('fierce1_proxy_url') || DEFAULT_PROXY,
+  aiKey: () => localStorage.getItem('fierce1_ai_key') || '',
+  ok:    () => !!localStorage.getItem('fierce1_sb_key'),
+  async select(table, params='') {
+    const k = SB.key(); if (!k) throw new Error('No Supabase key');
+    const r = await fetch(`${SB_URL}/rest/v1/${table}${params}`, {
+      headers:{ apikey:k, Authorization:`Bearer ${k}` }
+    });
+    if (!r.ok) throw new Error(`Supabase ${table}: ${r.status}`);
+    return r.json();
+  },
+  async upsert(table, row, onConflict='date') {
+    const k = SB.key(); if (!k) throw new Error('No Supabase key');
+    const r = await fetch(`${SB_URL}/rest/v1/${table}?on_conflict=${onConflict}`, {
+      method:'POST',
+      headers:{ apikey:k, Authorization:`Bearer ${k}`, 'Content-Type':'application/json',
+                Prefer:'return=representation,resolution=merge-duplicates' },
+      body: JSON.stringify(Array.isArray(row)?row:[row])
+    });
+    if (!r.ok) throw new Error(`Supabase upsert ${table}: ${r.status} ${(await r.text()).slice(0,120)}`);
+    return r.json();
+  }
+};
+
+/* Call Claude through the Worker proxy — same body shape the old tool used. */
+async function callAI(system, user, maxTokens=1400) {
+  const r = await fetch(SB.proxy(), {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ apiKey:SB.aiKey(), model:'claude-sonnet-4-5',
+      max_tokens:maxTokens, system, messages:[{ role:'user', content:user }] })
+  });
+  if (!r.ok) throw new Error(`Proxy ${r.status}`);
+  const d = await r.json();
+  return (d.content?.[0]?.text || '').trim();
+}
+
+/* Same proxy, but with server-side web search enabled — needed for CURRENT news.
+   REQUIRES the Worker to forward a `tools` array (see hand-off notes). The
+   web_search tool runs server-side at Anthropic, so results come back in one
+   response; we just concatenate every text block. */
+async function callAIWithSearch(system, user, maxTokens=2000) {
+  const r = await fetch(SB.proxy(), {
+    method:'POST', headers:{ 'Content-Type':'application/json' },
+    body: JSON.stringify({ apiKey:SB.aiKey(), model:'claude-sonnet-4-5',
+      max_tokens:maxTokens, system, messages:[{ role:'user', content:user }],
+      tools:[{ type:'web_search_20250305', name:'web_search', max_uses:5 }] })
+  });
+  if (!r.ok) throw new Error(`Proxy ${r.status}`);
+  const d = await r.json();
+  return (d.content||[]).filter(b=>b.type==='text').map(b=>b.text).join('\n').trim();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+const money = n => (n<0?'-$':'$') + Math.abs(Math.round(n)).toLocaleString();
+const signed = n => (n>=0?'+':'-') + '$' + Math.abs(Math.round(n)).toLocaleString();
+const num = v => { const x=parseFloat(v); return isFinite(x)?x:null; };
+const esc = s => (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+// Render model prose safely: escape, then convert the markdown the model tends
+// to emit (bold, headers, inline code, links) and strip citation artifacts.
+function mdlite(s){
+  if(!s) return '—';
+  s = esc(String(s));
+  s = s.replace(/【[^】]*】/g,'')                 // unicode citation brackets
+       .replace(/\[\d+\]/g,'')                    // [1]-style refs
+       .replace(/^#{1,6}\s*/gm,'')                // markdown headers
+       .replace(/`([^`]+)`/g,'$1')                // inline code ticks
+       .replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>')   // bold
+       .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>') // links
+       .replace(/\n{2,}/g,'<br><br>').replace(/\n/g,'<br>');
+  return s;
+}
+const todayISO = () => new Date().toISOString().slice(0,10);
+const normDate = d => (d||'').slice(0,10);
+// points captured: SHORT = entry-exit, else exit-entry
+const points = t => { const e=num(t.entry), x=num(t.exit); if(e==null||x==null) return null;
+  return t.side==='SHORT' ? (e-x) : (x-e); };
+// hour of day (ET-ish) parsed straight from the stored timestamp
+const hourOf = t => { const s=(t.date||''); const m=s.match(/T(\d{2}):/); return m?+m[1]:null; };
+
+/* ═══════════════════════════════════════════════════════════════
+   MODE SWITCHING
+   ═══════════════════════════════════════════════════════════════ */
+function switchMode(mode){
+  ['warroom','journal'].forEach(m=>{
+    $(m).classList.toggle('active', m===mode);
+    $('m-'+m).classList.toggle('active', m===mode);
+  });
+  $('nowbar').style.display = mode==='warroom' ? 'flex' : 'none';
+  if (mode==='journal') renderJournal();
+  if (mode==='warroom') refreshWarRoom();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   JOURNAL
+   ═══════════════════════════════════════════════════════════════ */
+let ALL_TRADES = [];
+let scope = 'week';
+
+// Monday (00:00) of the current week, ISO date — trading week starts Monday
+function weekStartISO(){
+  const d = new Date();
+  const day = d.getDay();              // 0=Sun … 6=Sat
+  const diff = (day===0 ? 6 : day-1);  // days back to Monday
+  d.setDate(d.getDate()-diff);
+  return d.toISOString().slice(0,10);
+}
+
+function setScope(s){
+  scope = s;
+  $('sc-week').classList.toggle('on', s==='week');
+  $('sc-all').classList.toggle('on', s==='all');
+  $('sc-since').classList.toggle('on', s==='since');
+  $('since-wrap').style.display = s==='since' ? 'flex' : 'none';
+  if (s==='since' && !$('since-date').value) $('since-date').value = todayISO();
+  const lbl=$('coach-scope-lbl'); if(lbl) lbl.textContent = scopeLabel();
+  renderJournal();
+}
+
+async function loadTrades(){
+  if (!SB.ok()) { $('jnl-nokey').style.display='flex'; return; }
+  $('jnl-nokey').style.display='none';
+  try {
+    ALL_TRADES = await SB.select('my_trades', '?order=date.asc&limit=10000');
+  } catch(e){ $('jnl-range').textContent = 'Load failed: '+e.message; ALL_TRADES=[]; }
+}
+
+function scopedTrades(){
+  let rows = ALL_TRADES.slice();
+  if (scope==='week'){
+    const s = weekStartISO();
+    rows = rows.filter(t => normDate(t.date) >= s);
+  } else if (scope==='since' && $('since-date').value){
+    const s = $('since-date').value;
+    rows = rows.filter(t => normDate(t.date) >= s);
+  }
+  return rows;
+}
+
+async function renderJournal(){
+  if (!ALL_TRADES.length) await loadTrades();
+  const rows = scopedTrades();
+  if (!rows.length){
+    if (!SB.ok())      $('jnl-range').textContent = 'Connect Supabase to load trades.';
+    else if (scope==='week') $('jnl-range').textContent = `No trades yet this week (since ${weekStartISO()}).`;
+    else               $('jnl-range').textContent = 'No trades in range.';
+    $('j-trades-body').innerHTML = '<tr><td colspan="9" class="empty">'+(scope==='week'?'Nothing logged this week yet.':'No trades.')+'</td></tr>';
+    return;
+  }
+  const dates = rows.map(t=>normDate(t.date)).filter(Boolean).sort();
+  const scopeLbl = scope==='week' ? 'This week · ' : scope==='since' ? 'Since '+$('since-date').value+' · ' : 'All-time · ';
+  $('jnl-range').textContent = `${scopeLbl}${dates[0]} → ${dates[dates.length-1]} · ${rows.length} trades`;
+
+  const pnls = rows.map(t=>num(t.pnl)||0);
+  const wins = rows.filter(t=>(num(t.pnl)||0)>0);
+  const losses = rows.filter(t=>(num(t.pnl)||0)<0);
+  const net = pnls.reduce((a,b)=>a+b,0);
+  const wr = rows.length ? (wins.length/rows.length*100) : 0;
+  const grossW = wins.reduce((a,t)=>a+num(t.pnl),0);
+  const grossL = Math.abs(losses.reduce((a,t)=>a+num(t.pnl),0));
+  const pf = grossL ? grossW/grossL : (grossW?Infinity:0);
+  const exp = rows.length ? net/rows.length : 0;
+
+  // R-multiples (1R = $250)
+  const Rs = pnls.map(p=>p/R_DOLLARS);
+  const expR = Rs.reduce((a,b)=>a+b,0)/Rs.length;
+  const totR = Rs.reduce((a,b)=>a+b,0);
+  const mean = expR, sd = Math.sqrt(Rs.reduce((a,r)=>a+(r-mean)**2,0)/Math.max(1,Rs.length));
+  const sqn = sd ? (mean/sd)*Math.sqrt(Rs.length) : 0;
+  const avgWinR = wins.length ? wins.reduce((a,t)=>a+num(t.pnl)/R_DOLLARS,0)/wins.length : 0;
+  const avgLossR = losses.length ? losses.reduce((a,t)=>a+num(t.pnl)/R_DOLLARS,0)/losses.length : 0;
+
+  set('j-pnl', money(net), net>=0?'bull':'bear');
+  $('j-wr').textContent = wr.toFixed(1)+'%';
+  $('j-wl').textContent = `${wins.length}W / ${losses.length}L`;
+  $('j-pf').textContent = pf===Infinity?'∞':pf.toFixed(2);
+  $('j-exp').textContent = signed(exp);
+  $('j-expr').textContent = (expR>=0?'+':'')+expR.toFixed(2)+'R';
+  $('j-totr').textContent = (totR>=0?'+':'')+totR.toFixed(1)+'R';
+  $('j-sqn').textContent = sqn.toFixed(2);
+  $('j-sqn-g').textContent = sqnGrade(sqn);
+  $('j-wlr').textContent = `${avgWinR.toFixed(2)} / ${avgLossR.toFixed(2)}`;
+
+  // daily profile
+  const byDay = groupByDay(rows);
+  const dayPnls = Object.values(byDay).map(ts=>ts.reduce((a,t)=>a+(num(t.pnl)||0),0));
+  const greenDays = dayPnls.filter(p=>p>0), redDays = dayPnls.filter(p=>p<0);
+  set('j-awd', greenDays.length?money(avg(greenDays)):'—', 'bull');
+  $('j-wd').textContent = `${greenDays.length} green days`;
+  set('j-ald', redDays.length?money(avg(redDays)):'—', 'bear');
+  $('j-ld').textContent = `${redDays.length} red days`;
+
+  // trade quality
+  const avgWin = wins.length?avg(wins.map(t=>num(t.pnl))):0;
+  const avgLoss = losses.length?avg(losses.map(t=>num(t.pnl))):0;
+  $('j-aw').textContent = money(avgWin);
+  $('j-aw-pts').textContent = ptsAvg(wins)+' pts';
+  $('j-al').textContent = money(avgLoss);
+  $('j-al-pts').textContent = ptsAvg(losses)+' pts';
+  $('j-wlrat').textContent = avgLoss?(avgWin/Math.abs(avgLoss)).toFixed(2):'—';
+  const qtys = rows.map(t=>num(t.qty)).filter(q=>q!=null);
+  $('j-avgq').textContent = qtys.length?avg(qtys).toFixed(1):'—';
+
+  // discipline
+  renderDiscipline(byDay);
+
+  // risk
+  const best = rows.reduce((m,t)=>(num(t.pnl)>num(m.pnl)?t:m), rows[0]);
+  const worst = rows.reduce((m,t)=>(num(t.pnl)<num(m.pnl)?t:m), rows[0]);
+  set('j-best', money(num(best.pnl)), 'bull'); $('j-best-sym').textContent = best.symbol||'—';
+  set('j-worst', money(num(worst.pnl)), 'bear'); $('j-worst-sym').textContent = worst.symbol||'—';
+  const streaks = maxStreaks(pnls);
+  $('j-mcw').textContent = streaks.w; $('j-mcl').textContent = streaks.l;
+
+  // timing
+  const hourMap = {};
+  rows.forEach(t=>{ const h=hourOf(t); if(h==null)return; (hourMap[h]=hourMap[h]||[]).push(num(t.pnl)||0); });
+  const hourAvgs = Object.entries(hourMap).map(([h,ps])=>({h:+h, avg:avg(ps), sum:ps.reduce((a,b)=>a+b,0), n:ps.length}));
+  if (hourAvgs.length){
+    const bh = hourAvgs.reduce((m,x)=>x.avg>m.avg?x:m);
+    const wh = hourAvgs.reduce((m,x)=>x.avg<m.avg?x:m);
+    $('j-bh').textContent = fmtHour(bh.h); $('j-bh-pnl').textContent = signed(bh.avg)+' avg';
+    $('j-wh').textContent = fmtHour(wh.h); $('j-wh-pnl').textContent = signed(wh.avg)+' avg';
+  }
+  $('j-total').textContent = rows.length;
+  $('j-days').textContent = Object.keys(byDay).length+' days';
+  $('j-tpd').textContent = (rows.length/Math.max(1,Object.keys(byDay).length)).toFixed(1);
+
+  // long/short
+  sideBox('LONG','j-long-wr','j-long-s','j-long-p', rows);
+  sideBox('SHORT','j-short-wr','j-short-s','j-short-p', rows);
+
+  // day of week
+  renderDOW(byDay);
+  drawHourChart(hourAvgs);
+  drawEquity(rows);
+  renderTradesTable(rows);
+}
+
+function renderDiscipline(byDay){
+  let clean=0, mistakes=0, postNoonNet=0;
+  const breakdown = {trades:0, lots:0, stop:0, noon:0, floor:0};
+  Object.values(byDay).forEach(ts=>{
+    let dayMistakes=0;
+    if (ts.length > RAILS.maxTrades){ dayMistakes+=ts.length-RAILS.maxTrades; breakdown.trades+=ts.length-RAILS.maxTrades; }
+    let dayPnl=0;
+    ts.forEach(t=>{
+      const p=num(t.pnl)||0, q=num(t.qty)||0, h=hourOf(t);
+      dayPnl+=p;
+      if (q>RAILS.sizeCap){ dayMistakes++; breakdown.lots++; }
+      if (p < RAILS.perTradeStop-1){ dayMistakes++; breakdown.stop++; }   // blew past the -$250 stop
+      if (h!=null && h>=RAILS.noonHourET){ breakdown.noon++; postNoonNet+=p; }
+    });
+    if (dayPnl < RAILS.dayFloor){ dayMistakes++; breakdown.floor++; }
+    if (dayMistakes===0) clean++;
+    mistakes+=dayMistakes;
+  });
+  set('j-clean', clean, 'bull');
+  set('j-mist', mistakes, 'bear');
+  set('j-pn', signed(postNoonNet), postNoonNet>=0?'bull':'bear');
+  const parts=[];
+  if(breakdown.trades) parts.push(`${breakdown.trades} over-trade`);
+  if(breakdown.lots) parts.push(`${breakdown.lots} oversize`);
+  if(breakdown.stop) parts.push(`${breakdown.stop} stop blown`);
+  if(breakdown.noon) parts.push(`${breakdown.noon} post-noon trades`);
+  if(breakdown.floor) parts.push(`${breakdown.floor} floor breach`);
+  $('j-mist-break').innerHTML = parts.length ? parts.join(' · ') : 'Clean record in range — no hard-rule breaks.';
+}
+
+function sideBox(side, wrId, sId, pId, rows){
+  const t = rows.filter(r=>r.side===side);
+  const w = t.filter(r=>num(r.pnl)>0);
+  $(wrId).textContent = t.length ? (w.length/t.length*100).toFixed(0)+'%' : '—';
+  $(sId).textContent = `${t.length} trades`;
+  $(pId).textContent = money(t.reduce((a,r)=>a+(num(r.pnl)||0),0));
+}
+
+function renderDOW(byDay){
+  const names=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const dow={};
+  Object.entries(byDay).forEach(([d,ts])=>{
+    const wd=new Date(d+'T12:00:00').getDay();
+    dow[wd]=(dow[wd]||0)+ts.reduce((a,t)=>a+(num(t.pnl)||0),0);
+  });
+  const items=Object.entries(dow).map(([wd,p])=>({wd:+wd,p})).sort((a,b)=>b.p-a.p);
+  $('j-dow').innerHTML = items.length ? items.map(x=>`
+    <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px">
+      <span style="color:var(--dim)">${names[x.wd]}</span>
+      <span class="${x.p>=0?'pos':'neg'}">${signed(x.p)}</span>
+    </div>`).join('') : '<span class="mono" style="font-size:11px;color:var(--dim)">—</span>';
+}
+
+function renderTradesTable(rows){
+  const body=$('j-trades-body');
+  const sorted=rows.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  body.innerHTML = sorted.map(t=>{
+    const p=num(t.pnl)||0, pt=points(t);
+    return `<tr>
+      <td class="mono" style="color:var(--dim)">${esc((t.date||'').slice(0,16).replace('T',' '))}</td>
+      <td class="mono" style="font-size:11px">${esc(t.account||'—')}</td>
+      <td>${esc(t.symbol||'—')}</td>
+      <td style="color:${t.side==='LONG'?'var(--bull)':'var(--bear)'};font-weight:700">${esc(t.side||'—')}</td>
+      <td>${esc(t.qty??'—')}</td>
+      <td>${t.entry??'—'}</td>
+      <td>${t.exit??'—'}</td>
+      <td class="${pt>=0?'pos':'neg'}">${pt==null?'—':(pt>=0?'+':'')+pt.toFixed(2)}</td>
+      <td class="${p>=0?'pos':'neg'}" style="font-weight:700">${signed(p)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* canvases */
+function drawHourChart(hourAvgs){
+  const cv=$('j-hour'); const ctx=cv.getContext('2d');
+  const W=cv.width=cv.offsetWidth, H=cv.height=120; ctx.clearRect(0,0,W,H);
+  if(!hourAvgs.length) return;
+  const hours=[...Array(24).keys()];
+  const map={}; hourAvgs.forEach(x=>map[x.h]=x.sum);
+  const vals=hours.map(h=>map[h]||0);
+  const max=Math.max(1,...vals.map(Math.abs));
+  const bw=W/24, mid=H/2;
+  ctx.strokeStyle='rgba(79,174,106,0.15)'; ctx.beginPath(); ctx.moveTo(0,mid); ctx.lineTo(W,mid); ctx.stroke();
+  hours.forEach(h=>{
+    const v=vals[h], bh=(Math.abs(v)/max)*(H/2-8);
+    ctx.fillStyle = v>=0?'rgba(214,173,78,0.8)':'rgba(224,82,79,0.8)';
+    if(v>=0) ctx.fillRect(h*bw+1, mid-bh, bw-2, bh);
+    else ctx.fillRect(h*bw+1, mid, bw-2, bh);
+    if(h%3===0){ ctx.fillStyle='rgba(125,141,131,0.7)'; ctx.font='9px IBM Plex Mono'; ctx.fillText(h, h*bw+2, H-2); }
+  });
+}
+function drawEquity(rows){
+  const cv=$('j-equity'); const ctx=cv.getContext('2d');
+  const W=cv.width=cv.offsetWidth, H=cv.height=150; ctx.clearRect(0,0,W,H);
+  const sorted=rows.slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));
+  let cum=0; const pts=sorted.map(t=>(cum+=num(t.pnl)||0));
+  if(pts.length<2) return;
+  const min=Math.min(0,...pts), max=Math.max(0,...pts), rng=max-min||1;
+  const x=i=>i/(pts.length-1)*W, y=v=>H-8-((v-min)/rng)*(H-16);
+  // zero line
+  ctx.strokeStyle='rgba(79,174,106,0.15)'; ctx.beginPath(); ctx.moveTo(0,y(0)); ctx.lineTo(W,y(0)); ctx.stroke();
+  // fill
+  ctx.beginPath(); ctx.moveTo(0,y(pts[0]));
+  pts.forEach((v,i)=>ctx.lineTo(x(i),y(v)));
+  ctx.lineTo(W,y(0)); ctx.lineTo(0,y(0)); ctx.closePath();
+  ctx.fillStyle='rgba(79,174,106,0.1)'; ctx.fill();
+  // line
+  ctx.beginPath(); ctx.moveTo(0,y(pts[0]));
+  pts.forEach((v,i)=>ctx.lineTo(x(i),y(v)));
+  ctx.strokeStyle='#62c184'; ctx.lineWidth=1.8; ctx.stroke();
+}
+
+/* small stat helpers */
+function set(id,v,cls){ const el=$(id); el.textContent=v; if(cls) el.className='val '+cls; }
+function avg(a){ return a.length?a.reduce((x,y)=>x+y,0)/a.length:0; }
+function ptsAvg(ts){ const ps=ts.map(points).filter(p=>p!=null); return ps.length?(avg(ps)>=0?'+':'')+avg(ps).toFixed(1):'—'; }
+function groupByDay(rows){ const g={}; rows.forEach(t=>{ const d=normDate(t.date); if(!d)return; (g[d]=g[d]||[]).push(t); }); return g; }
+function maxStreaks(pnls){ let w=0,l=0,cw=0,cl=0; pnls.forEach(p=>{ if(p>0){cw++;cl=0;w=Math.max(w,cw);} else if(p<0){cl++;cw=0;l=Math.max(l,cl);} else {cw=0;cl=0;} }); return {w,l}; }
+function sqnGrade(s){ return s<1.6?'below average':s<2?'average':s<2.5?'good':s<3?'excellent':s<5?'superb':'holy grail'; }
+function fmtHour(h){ const am=h<12; let hh=h%12; if(hh===0)hh=12; return `${hh}${am?'am':'pm'}`; }
+
+/* ═══════════════════════════════════════════════════════════════
+   TRADING COACH — compact behavioral profile → AI read (process, not calls)
+   ═══════════════════════════════════════════════════════════════ */
+function buildProfile(rows){
+  const p = rows.map(t=>num(t.pnl)||0);
+  const wins=rows.filter(t=>(num(t.pnl)||0)>0), losses=rows.filter(t=>(num(t.pnl)||0)<0);
+  const net=p.reduce((a,b)=>a+b,0);
+  const grossW=wins.reduce((a,t)=>a+num(t.pnl),0), grossL=Math.abs(losses.reduce((a,t)=>a+num(t.pnl),0));
+  const byDay=groupByDay(rows);
+  const dayPnls=Object.values(byDay).map(ts=>ts.reduce((a,t)=>a+(num(t.pnl)||0),0));
+  // hour distribution
+  const hourMap={}; rows.forEach(t=>{const h=hourOf(t);if(h==null)return;(hourMap[h]=hourMap[h]||[]).push(num(t.pnl)||0);});
+  const hourAgg=Object.entries(hourMap).map(([h,ps])=>({h:+h,sum:ps.reduce((a,b)=>a+b,0),n:ps.length})).sort((a,b)=>b.sum-a.sum);
+  // discipline tally (uses live RAILS: $250 stop, 4 micros, 7/day, noon, -$1000)
+  let overDays=0, oversize=0, blownStops=0, postNoonNet=0, postNoonN=0, floorBreaks=0;
+  Object.values(byDay).forEach(ts=>{
+    if(ts.length>RAILS.maxTrades) overDays++;
+    let dp=0;
+    ts.forEach(t=>{const pl=num(t.pnl)||0,q=num(t.qty)||0,h=hourOf(t); dp+=pl;
+      if(q>RAILS.sizeCap) oversize++;
+      if(pl<RAILS.perTradeStop-1) blownStops++;
+      if(h!=null&&h>=RAILS.noonHourET){postNoonN++;postNoonNet+=pl;}});
+    if(dp<RAILS.dayFloor) floorBreaks++;
+  });
+  const side=s=>{const t=rows.filter(r=>r.side===s);return {n:t.length,wr:t.length?Math.round(t.filter(r=>num(r.pnl)>0).length/t.length*100):0,pnl:Math.round(t.reduce((a,r)=>a+(num(r.pnl)||0),0))};};
+  const streaks=maxStreaks(p);
+  const qtys=rows.map(t=>num(t.qty)).filter(q=>q!=null);
+  return {
+    scope, weekStart: scope==='week'?weekStartISO():null,
+    trades: rows.length, tradingDays: Object.keys(byDay).length,
+    netPnl: Math.round(net),
+    winRate: rows.length?Math.round(wins.length/rows.length*100):0,
+    profitFactor: grossL?+(grossW/grossL).toFixed(2):null,
+    expectancy: rows.length?Math.round(net/rows.length):0,
+    avgWin: wins.length?Math.round(grossW/wins.length):0,
+    avgLoss: losses.length?Math.round(-grossL/losses.length):0,
+    avgGreenDay: dayPnls.filter(d=>d>0).length?Math.round(avg(dayPnls.filter(d=>d>0))):0,
+    avgRedDay: dayPnls.filter(d=>d<0).length?Math.round(avg(dayPnls.filter(d=>d<0))):0,
+    tradesPerDay: +(rows.length/Math.max(1,Object.keys(byDay).length)).toFixed(1),
+    avgSize: qtys.length?+avg(qtys).toFixed(1):null,
+    maxConsecWins: streaks.w, maxConsecLosses: streaks.l,
+    long: side('LONG'), short: side('SHORT'),
+    bestHours: hourAgg.slice(0,2).map(x=>({hour:fmtHour(x.h),pnl:Math.round(x.sum),n:x.n})),
+    worstHours: hourAgg.slice(-2).map(x=>({hour:fmtHour(x.h),pnl:Math.round(x.sum),n:x.n})),
+    rules: { maxPerTrade:250, maxMicros:4, maxTradesPerDay:7, dailyStop:-1000, noonStop:true },
+    discipline: { overTradedDays:overDays, oversizeTrades:oversize, blownStops, postNoonTrades:postNoonN, postNoonNet:Math.round(postNoonNet), floorBreachDays:floorBreaks }
+  };
+}
+
+async function analyzeTrading(){
+  if(!SB.aiKey()){ alert('Add your Anthropic API key in Settings first.'); return; }
+  const rows = scopedTrades();
+  if(!rows.length){ $('coach-body').innerHTML='<span class="warn">No trades in the current view to analyze. Switch to All-time or log some trades first.</span>'; return; }
+  const btn=$('coach-btn'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> reading…';
+  $('coach-body').innerHTML='<span class="spin"></span> analyzing your last '+rows.length+' trades…';
+  const profile = buildProfile(rows);
+  const scopeWord = scope==='week'?'this week':scope==='since'?('since '+$('since-date').value):'all-time';
+  const system = `You are a disciplined futures-trading process coach for an intraday NQ/MNQ trader.
+You analyze the trader's OWN logged behavior and give behavioral, process, and discipline feedback — never market predictions or specific entries.
+Reinforce their hard rules ($250 max/trade, 4 micros max, 7 trades/day, $1000 daily stop, noon hard stop). Never suggest trading more, sizing up, or loosening risk.
+Be specific and cite their numbers. Be direct but constructive. If the sample is small, say so and keep claims tentative. Return ONLY valid JSON.`;
+  const user = `Here is my trading profile for ${scopeWord} (all $ figures, R unit = $250):
+${JSON.stringify(profile,null,1)}
+
+Analyze it and return ONLY this JSON:
+{
+ "readout":"2-3 sentence honest summary of how I'm trading in this window",
+ "working":["specific strengths, cite my numbers"],
+ "leaks":["specific behavioral leaks / risk patterns, cite my numbers"],
+ "suggestions":["concrete, process-level actions I can take — not trade ideas"],
+ "focus":"the single most important thing to work on next session"
+}
+Keep each array to 2-4 short items. Ground every point in the data above.`;
+  try {
+    const text = await callAI(system, user, 1600);
+    const a=text.indexOf('{'), b=text.lastIndexOf('}');
+    const d = JSON.parse(a>=0&&b>a?text.slice(a,b+1):text);
+    renderCoach(d, rows.length, scopeWord);
+  } catch(e){
+    $('coach-body').innerHTML='<span class="bear">Analysis failed: '+esc(e.message)+'</span>';
+  } finally { btn.disabled=false; btn.innerHTML='Analyze <span id="coach-scope-lbl">'+scopeLabel()+'</span>'; }
+}
+
+function renderCoach(d, n, scopeWord){
+  const list=(arr,color)=> (arr&&arr.length)? arr.map(x=>`<li style="margin:3px 0;color:${color}">${esc(x)}</li>`).join('') : '<li style="color:var(--dim)">—</li>';
+  $('coach-body').innerHTML = `
+    <div style="color:var(--text);font-size:13px;margin-bottom:12px">${mdlite(d.readout||'')}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div class="label" style="color:var(--bull);font-size:9px">✓ Working</div>
+        <ul style="list-style:none;padding:0;font-size:12px">${list(d.working,'var(--text)')}</ul>
+      </div>
+      <div>
+        <div class="label" style="color:var(--bear);font-size:9px">⚠ Leaks</div>
+        <ul style="list-style:none;padding:0;font-size:12px">${list(d.leaks,'var(--text)')}</ul>
+      </div>
+    </div>
+    <div style="margin-top:12px">
+      <div class="label" style="color:var(--accent-g);font-size:9px">→ Suggestions</div>
+      <ul style="list-style:none;padding:0;font-size:12px">${list(d.suggestions,'var(--text)')}</ul>
+    </div>
+    <div style="margin-top:12px;background:var(--bg3);border:1px solid var(--border2);border-left:3px solid var(--gold);border-radius:6px;padding:11px 13px">
+      <div class="label" style="color:var(--gold);font-size:9px;margin-bottom:4px">Focus next session</div>
+      <div style="color:var(--text);font-size:13px">${esc(d.focus||'—')}</div>
+    </div>
+    <div style="font-size:9px;color:var(--dim);margin-top:10px">Based on ${n} trades · ${esc(scopeWord)} · process coaching, not financial advice</div>`;
+}
+
+function scopeLabel(){ return scope==='week'?'this week':scope==='since'?'since date':'all-time'; }
+
+/* ═══════════════════════════════════════════════════════════════
+   WAR ROOM
+   ═══════════════════════════════════════════════════════════════ */
+let pollTimer=null;
+
+// Parse KEY: value pairs out of a CROC1 alert message → {sh,sl,pdh,pdl,ldh,ldl,ash,asl,fb,...}
+function parseLevels(msg){
+  const out={}; if(!msg) return out;
+  const re=/([A-Z]{2,4})\s*[:=]\s*(-?\d+(?:\.\d+)?)/g; let m;
+  while((m=re.exec(msg))){ out[m[1].toLowerCase()]=parseFloat(m[2]); }
+  return out;
+}
+
+async function refreshWarRoom(){
+  if (!SB.ok()){ $('wr-nokey').style.display='flex'; return; }
+  $('wr-nokey').style.display='none';
+  updateNowClock();
+  const today=todayISO();
+  try {
+    // alerts_raw for today → price tape + latest levels
+    const alerts = await SB.select('alerts_raw',
+      `?select=date,message,received_at&date=eq.${today}&order=received_at.desc&limit=200`);
+    renderTape(alerts);
+    // today's session row → stored windows (levels)
+    let sess=[];
+    try { sess = await SB.select('sessions', `?select=*&date=eq.${today}&limit=1`); } catch(e){}
+    const windows = (sess[0] && sess[0].session_feed && sess[0].session_feed.windows) || {};
+    renderBiasAndPrice(alerts, windows);
+    // today's trades → now-bar
+    const trades = await SB.select('my_trades', `?select=*&date=like.${today}*&limit=200`);
+    updateNowbar(trades);
+    $('wr-status').textContent = `Updated ${new Date().toLocaleTimeString()} · ${alerts.length} alerts today`;
+  } catch(e){
+    $('wr-status').textContent = 'Refresh failed: '+e.message;
+  }
+}
+
+function renderTape(alerts){
+  const el=$('tape');
+  if(!alerts || !alerts.length){ el.innerHTML='<div class="mono" style="font-size:11px;color:var(--dim)">No alerts yet today.</div>'; return; }
+  el.innerHTML = alerts.map(a=>`
+    <div class="tape-row">
+      <div class="t">${esc((a.received_at||'').slice(11,19))}</div>
+      <div class="m">${esc(a.message||'')}</div>
+    </div>`).join('');
+}
+
+function renderBiasAndPrice(alerts, windows){
+  // pull the freshest level set: prefer a stored window, else parse newest alert
+  let lv={};
+  const wKeys=Object.keys(windows).sort();
+  if(wKeys.length){ const w=windows[wKeys[wKeys.length-1]]; lv=parseLevels(w.msg||w.message||''); }
+  if(!Object.keys(lv).length && alerts && alerts.length){ lv=parseLevels(alerts[0].message||''); }
+
+  // crude directional lean from level structure: where is FB vs session mid
+  let bias=0, word='NEUTRAL';
+  if(lv.sh!=null && lv.sl!=null){
+    const mid=(lv.sh+lv.sl)/2;
+    if(lv.fb!=null){ bias = lv.fb>mid ? 0.5 : -0.5; }
+  }
+  const pct=(bias+1)/2*100;
+  $('bias-needle').style.left=pct+'%';
+  word = bias>0.15?'LONG lean':bias<-0.15?'SHORT lean':'NEUTRAL';
+  $('bias-word').textContent=word;
+  $('bias-word').style.color = bias>0.15?'var(--bull)':bias<-0.15?'var(--bear)':'var(--dim)';
+
+  const shown=Object.entries(lv).slice(0,8).map(([k,v])=>`${k.toUpperCase()} ${v}`).join('  ·  ');
+  $('price-now').textContent = shown || 'No levels parsed yet.';
+  window._todayLevels = lv;
+}
+
+function updateNowbar(trades){
+  const t = trades||[];
+  const wins=t.filter(x=>num(x.pnl)>0).length, losses=t.filter(x=>num(x.pnl)<0).length;
+  const pnl=t.reduce((a,x)=>a+(num(x.pnl)||0),0);
+  $('nb-count').textContent=`${t.length}/7`;
+  $('nb-count').style.color = t.length>7?'var(--bear)':'var(--text)';
+  $('nb-wl').textContent=`${wins}-${losses}`;
+  $('nb-pnl').textContent=signed(pnl);
+  $('nb-pnl').style.color = pnl>=0?'var(--bull)':'var(--bear)';
+}
+
+function updateNowClock(){
+  const now=new Date();
+  $('nb-time').textContent = now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+  $('nb-window').textContent = currentWindow();
+}
+function currentWindow(){
+  // rough ET window label based on local time offset to ET
+  const et = new Date(new Date().toLocaleString('en-US',{timeZone:'America/New_York'}));
+  const h=et.getHours(), m=et.getMinutes();
+  const t=h*60+m;
+  if(t<2*60) return 'overnight';
+  if(t<7*60) return 'London';
+  if(t<9*60+30) return 'pre-open';
+  if(t<10*60+30) return 'IB (9:30–10:30)';
+  if(t<12*60) return 'mid-morning';
+  if(t<16*60) return 'afternoon';
+  return 'closed';
+}
+
+/* AI brief + suggested trades */
+async function runBrief(){
+  if(!SB.aiKey()){ alert('Add your Anthropic API key in Settings first.'); return; }
+  const lv=window._todayLevels||{};
+  $('brief-body').innerHTML='<span class="spin"></span> generating…';
+  $('sug-body').innerHTML='<span class="spin"></span> generating ideas…';
+  const system = `You are CROC1, an NQ futures trading assistant for a disciplined intraday trader.
+Rules the trader lives by: max 7 trades/day, max 4 micro contracts (MNQ), honor a -$250 per-trade stop, hard stop at noon ET, -$1000 daily floor.
+Be concise, technical, and non-hyped. Trade with the structural lean; skip setups that fight it.`;
+  const levelText = Object.entries(lv).map(([k,v])=>`${k.toUpperCase()}: ${v}`).join('\n') || '(no levels parsed yet)';
+  const user = `Today's session levels (from the CROC1 alert feed):
+${levelText}
+
+1) Write a 3-4 sentence market brief for the NY session: the structural read, the key levels that matter, and the directional lean.
+2) Then output up to 3 concrete trade ideas as JSON after the prose, wrapped exactly in <ideas>[...]</ideas>.
+Each idea: {"direction":"LONG|SHORT|NEUTRAL","entry":"level or zone","stop":"level","target":"level","note":"one line why"}.`;
+
+  try {
+    const text = await callAI(system, user, 1400);
+    const m = text.match(/<ideas>([\s\S]*?)<\/ideas>/);
+    let ideas=[]; let prose=text;
+    if(m){ prose=text.slice(0,m.index).trim(); try{ ideas=JSON.parse(m[1].trim()); }catch(e){} }
+    $('brief-body').innerHTML = mdlite(prose);
+    renderSuggested(ideas);
+    saveBrief(prose, ideas).catch(()=>{});
+  } catch(e){
+    $('brief-body').innerHTML = '<span class="bear">Brief failed: '+esc(e.message)+'</span>';
+    $('sug-body').innerHTML='';
+  }
+}
+
+function renderSuggested(ideas){
+  if(!ideas || !ideas.length){ $('sug-body').innerHTML='<div class="mono" style="font-size:11px;color:var(--dim)">No clean setups called.</div>'; return; }
+  $('sug-body').innerHTML = ideas.slice(0,3).map(i=>{
+    const d=(i.direction||'NEUTRAL').toUpperCase();
+    const cls=d==='LONG'?'long':d==='SHORT'?'short':'neutral';
+    return `<div class="sug">
+      <div class="h"><span class="dir ${d==='LONG'?'bull':d==='SHORT'?'bear':''}">${esc(d)}</span><span class="chip ${cls}">${esc(d)}</span></div>
+      <div class="body">${esc(i.note||'')}</div>
+      <div class="lv">entry ${esc(i.entry||'—')} · stop ${esc(i.stop||'—')} · target ${esc(i.target||'—')}</div>
+    </div>`;
+  }).join('');
+}
+
+async function saveBrief(prose, ideas){
+  if(!SB.ok()) return;
+  await SB.upsert('ai_reports', {
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    date: todayISO(), type:'war_room_brief', content: prose,
+    metadata: { ideas }
+  }, 'id');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MARKET INTEL — macro summary + headlines + econ calendar (one search call)
+   ═══════════════════════════════════════════════════════════════ */
+async function refreshIntel(){
+  if(!SB.aiKey()){ alert('Add your Anthropic API key in Settings first.'); return; }
+  const btn=$('intel-refresh-btn'); btn.disabled=true; btn.innerHTML='<span class="spin"></span> pulling…';
+  $('intel-summary').innerHTML='<span class="spin"></span> searching…';
+  const system = `You are a markets desk assistant for an intraday NQ (Nasdaq futures) trader.
+Be factual, current, and non-hyped. ALWAYS use web search for live data. Return ONLY valid JSON, no prose outside it.`;
+  const nowET = new Date().toLocaleString('en-US',{timeZone:'America/New_York'});
+  const user = `Current time: ${nowET} (ET). Using web search, find the most RECENT news moving US equity index futures (especially NQ/Nasdaq), plus this week's high-impact US economic calendar.
+
+STRICT recency rule for headlines: only include items published within the LAST 12 HOURS. Discard anything older. Prefer major financial wires (Reuters, Bloomberg, CNBC, MarketWatch, AP, WSJ). Search for the freshest results — do more than one search if needed to get breaking items.
+
+Return ONLY this JSON shape:
+{
+ "summary":"3-4 sentence macro read for today's NY session — what's driving risk, tone, and anything NQ-relevant (plain text, no markdown, no citations)",
+ "headlines":[{"title":"...","source":"...","hours_ago":2,"url":"https://..."}],
+ "calendar":[{"event":"e.g. CPI, FOMC, NFP","day":"Mon/Tue/...","timeET":"8:30 AM ET","impact":"high|medium"}]
+}
+Rules: up to 6 headlines, each with a numeric "hours_ago" (integer hours since publish), sorted newest first, all <= 12. Calendar = only high/medium-impact US events for the current week. Summary must be plain text with no ** markdown ** or [1] citation markers.`;
+  try {
+    const text = await callAIWithSearch(system, user, 2200);
+    const a=text.indexOf('{'), b=text.lastIndexOf('}');
+    const data = JSON.parse(a>=0 && b>a ? text.slice(a,b+1) : text);
+    renderIntel(data);
+    cacheIntel(data).catch(()=>{});
+  } catch(e){
+    $('intel-summary').innerHTML='<span class="bear">Intel failed: '+esc(e.message)+'</span><br>'+
+      '<span class="mono" style="font-size:10px;color:var(--dim)">If this keeps failing, your Worker likely isn\'t forwarding the <b>tools</b> param yet — see hand-off notes.</span>';
+  } finally { btn.disabled=false; btn.innerHTML='↻ Refresh Intel'; }
+}
+
+function renderIntel(data){
+  // summary
+  $('intel-summary').innerHTML = mdlite(data.summary);
+  $('intel-summary-time').textContent = '· '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  // headlines — hard-filter to the last 12h and sort freshest first
+  const hs=(data.headlines||[])
+    .filter(h=> h.hours_ago==null || (+h.hours_ago<=12))
+    .sort((a,b)=>(+a.hours_ago||99)-(+b.hours_ago||99));
+  const ago = h => h.hours_ago!=null ? (+h.hours_ago<=0?'just now':(+h.hours_ago)+'h ago') : (h.time||'');
+  const fresh = h => h.hours_ago!=null && +h.hours_ago<=2;
+  $('intel-headlines').innerHTML = hs.length ? hs.map(h=>`
+    <div class="hl-row" style="${fresh(h)?'border-left-color:var(--accent)':''}">
+      <a href="${esc(h.url||'#')}" target="_blank" rel="noopener">${esc(h.title||'')}</a>
+      <div class="meta">${esc(h.source||'')}${ago(h)?' · '+esc(ago(h)):''}${fresh(h)?' · <span class="accent">fresh</span>':''}</div>
+    </div>`).join('') : '<div class="mono" style="font-size:11px;color:var(--dim)">Nothing in the last 12h.</div>';
+  // calendar — strip = today's, full = week
+  const cal=data.calendar||[];
+  const todayName=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()];
+  const todays=cal.filter(c=>(c.day||'').slice(0,3)===todayName);
+  $('cal-strip-body').innerHTML = todays.length ? todays.map(c=>
+    `<span class="cal-pill ${c.impact==='high'?'high':'med'}">${esc(c.event)} · ${esc(c.timeET||'')}</span>`
+  ).join(' ') : '<span class="mono" style="font-size:11px;color:var(--dim)">No high-impact US events today. Clear to trade your levels.</span>';
+  $('cal-full-body').innerHTML = cal.length ? `<table>
+    <thead><tr><th>Day</th><th>Time ET</th><th>Event</th><th>Impact</th></tr></thead>
+    <tbody>${cal.map(c=>`<tr>
+      <td class="mono">${esc(c.day||'')}</td><td class="mono">${esc(c.timeET||'')}</td>
+      <td>${esc(c.event||'')}</td>
+      <td><span class="chip ${c.impact==='high'?'short':'neutral'}">${esc(c.impact||'')}</span></td>
+    </tr>`).join('')}</tbody></table>` : '<div class="mono" style="font-size:11px;color:var(--dim)">No events.</div>';
+}
+
+async function cacheIntel(data){
+  if(!SB.ok()) return;
+  await SB.upsert('ai_reports', {
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    date: todayISO(), type:'market_intel', content: data.summary||'',
+    metadata: data
+  }, 'id');
+}
+async function loadCachedIntel(){
+  if(!SB.ok()) return;
+  try {
+    const rows = await SB.select('ai_reports',
+      `?select=metadata,created_at&type=eq.market_intel&date=eq.${todayISO()}&order=created_at.desc&limit=1`);
+    if(rows[0] && rows[0].metadata){ renderIntel(rows[0].metadata); }
+  } catch(e){ /* no cache yet — fine */ }
+}
+
+/* EOD */
+function doEOD(){
+  if(!confirm("Close the session for today? This dims the app until tomorrow.")) return;
+  localStorage.setItem('fierce1_closed', todayISO());
+  applyClosedState();
+}
+function applyClosedState(){
+  const closed = localStorage.getItem('fierce1_closed')===todayISO();
+  document.body.classList.toggle('session-closed', closed);
+  $('closed-banner').style.display = closed ? 'flex' : 'none';
+}
+function reopenSession(){ localStorage.removeItem('fierce1_closed'); applyClosedState(); }
+
+/* session notes — local per day */
+function noteKey(){ return 'fierce1_notes_'+todayISO(); }
+function loadNotes(){ try{ return JSON.parse(localStorage.getItem(noteKey())||'[]'); }catch(e){ return []; } }
+function addNote(){
+  const v=$('note-input').value.trim(); if(!v) return;
+  const notes=loadNotes(); notes.unshift({ t:new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}), v });
+  localStorage.setItem(noteKey(), JSON.stringify(notes));
+  $('note-input').value=''; renderNotes();
+}
+function renderNotes(){
+  const notes=loadNotes();
+  $('notes-list').innerHTML = notes.length ? notes.map(n=>`
+    <div class="mono" style="font-size:12px;background:var(--bg3);border:1px solid var(--border);border-radius:5px;padding:7px 10px">
+      <span style="color:var(--dim);font-size:9px">${esc(n.t)}</span><br>${esc(n.v)}
+    </div>`).join('') : '<span class="mono" style="font-size:11px;color:var(--dim)">No notes yet today.</span>';
+}
+
+/* paste-alert backfill */
+function openPaste(){ $('paste-date').value=todayISO(); $('paste').classList.add('open'); }
+function closePaste(){ $('paste').classList.remove('open'); }
+async function submitPaste(){
+  const date=$('paste-date').value, win=$('paste-window').value, txt=$('paste-text').value.trim();
+  if(!date||!txt){ $('paste-status').textContent='Date and alert text required.'; return; }
+  if(!SB.ok()){ $('paste-status').textContent='Connect Supabase first.'; return; }
+  $('paste-status').innerHTML='<span class="spin"></span> writing…';
+  try {
+    let sess=[]; try{ sess=await SB.select('sessions',`?select=*&date=eq.${date}&limit=1`); }catch(e){}
+    const feed = (sess[0] && sess[0].session_feed) || { windows:{} };
+    feed.windows = feed.windows || {};
+    feed.windows[win] = { msg: txt, backfilled:true, at:new Date().toISOString() };
+    await SB.upsert('sessions', { date, session_feed: feed }, 'date');
+    $('paste-status').innerHTML='<span class="accent">✓ Window '+win+' backfilled.</span>';
+    refreshWarRoom();
+  } catch(e){ $('paste-status').innerHTML='<span class="bear">Failed: '+esc(e.message)+'</span>'; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SETTINGS
+   ═══════════════════════════════════════════════════════════════ */
+function openSettings(){
+  $('set-key').value = SB.key();
+  $('set-proxy').value = SB.proxy();
+  $('set-ai').value = SB.aiKey();
+  $('set-status').textContent='';
+  $('settings').classList.add('open');
+}
+function closeSettings(){ $('settings').classList.remove('open'); }
+function saveSettings(){
+  localStorage.setItem('fierce1_sb_key', $('set-key').value.trim());
+  localStorage.setItem('fierce1_proxy_url', $('set-proxy').value.trim() || DEFAULT_PROXY);
+  localStorage.setItem('fierce1_ai_key', $('set-ai').value.trim());
+  $('set-status').innerHTML='<span class="accent">✓ Saved.</span>';
+  ALL_TRADES=[];
+  setTimeout(()=>{ closeSettings(); boot(); }, 500);
+}
+async function testConn(){
+  $('set-status').innerHTML='<span class="spin"></span> testing…';
+  localStorage.setItem('fierce1_sb_key', $('set-key').value.trim());
+  try {
+    const r = await SB.select('my_trades','?select=id&limit=1');
+    $('set-status').innerHTML='<span class="accent">✓ Supabase reachable — read OK.</span>';
+  } catch(e){ $('set-status').innerHTML='<span class="bear">✗ '+esc(e.message)+'</span>'; }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BOOT
+   ═══════════════════════════════════════════════════════════════ */
+async function boot(){
+  applyClosedState();
+  renderNotes();
+  updateNowClock();
+  if (!SB.ok()){
+    $('wr-nokey').style.display='flex';
+    $('jnl-nokey').style.display='flex';
+    $('wr-status').textContent='Add your Supabase key in Settings to go live.';
+  } else {
+    await refreshWarRoom();
+    await loadCachedIntel();   // show today's cached intel; user hits Refresh Intel for a live pull
+    await loadTrades();
+  }
+  // War Room is the default view
+  clearInterval(pollTimer);
+  pollTimer = setInterval(()=>{ if($('warroom').classList.contains('active')) refreshWarRoom(); updateNowClock(); }, 20000);
+  setInterval(updateNowClock, 1000);
+}
+document.addEventListener('DOMContentLoaded', boot);
+</script>
+</body>
+</html>
